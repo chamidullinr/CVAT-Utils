@@ -320,7 +320,7 @@ def download_data(
     metadata = {
         "info": {
             "task_ids": task_ids,
-            "date_created": now.strftime("%Y/%m/%d"),
+            "date_created": now.strftime("%d/%m/%Y"),
         },
         "images": images,
         "annotations": annotations,
