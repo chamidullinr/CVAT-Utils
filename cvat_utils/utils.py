@@ -28,6 +28,7 @@ class ErrorMonitor:
         self.errors[msg] += 1
 
     def print_errors(self):
-        logger.warning(
-            f"Found the following errors during processing: {json.dumps(self.errors, indent=4)}"
-        )
+        if len(self.errors) > 0:
+            logger.warning(
+                f"Found the following errors during processing: {json.dumps(self.errors, indent=4)}"
+            )

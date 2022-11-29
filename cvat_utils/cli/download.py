@@ -34,7 +34,7 @@ def load_args(args: list = None) -> argparse.Namespace:
         required=True,
     )
     parser.add_argument(
-        "--images",
+        "--load-images",
         help="If selected the script will download images from CVAT.",
         action="store_true",
     )
@@ -176,12 +176,15 @@ def download_data(
     *,
     task_ids: List[int],
     output_path: str,
-    images: bool = False,
+    load_images: bool = False,
     points: bool = False,
     polylines: bool = False,
     polygons: bool = False,
     bboxes: bool = False,
 ):
+    if not isinstance(task_ids, (list, tuple)):
+        task_ids = [task_ids]
+
     # create output paths
     os.makedirs(output_path, exist_ok=True)
     metadata_file = os.path.join(output_path, "metadata.json")
@@ -190,7 +193,7 @@ def download_data(
         sys.exit(0)
 
     images_path = None
-    if images:
+    if load_images:
         images_path = os.path.join(output_path, "images")
         os.makedirs(images_path, exist_ok=True)
 
@@ -218,11 +221,15 @@ def download_data(
         )
 
         # download images
-        if images:
+        if load_images:
             files = download_images(task_id, images_path)
 
             # include image paths to the metadata
-            fileid2filepath = {"/".join(x.split(".")[0].split("/")[1:]): x for x in files}
+            # remove task-{id}/images prefix to get a file id
+            fileid2filepath = {
+                x.split(".")[0].replace(f"task-{task_id}/images/", ""): x
+                for x in files
+            }
             for x in task_images:
                 if x["id"] not in fileid2filepath:
                     error_monitor.log_error(f"Some images in task {task_id} were not downloaded.")
@@ -234,7 +241,7 @@ def download_data(
     # print errors
     error_monitor.print_errors()
 
-    if images:
+    if load_images:
         logger.info(f"Images were saved to the directory: {images_path}")
 
     # create output dictionary and save to JSON
@@ -258,7 +265,7 @@ if __name__ == "__main__":
     download_data(
         task_ids=args.task_ids,
         output_path=args.output_path,
-        images=args.images,
+        load_images=args.load_images,
         points=args.points,
         polylines=args.polylines,
         polygons=args.polygons,
