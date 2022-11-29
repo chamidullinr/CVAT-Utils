@@ -4,7 +4,6 @@ import os
 from typing import Union
 
 import requests
-from dotenv import load_dotenv
 
 logger = logging.getLogger("scripts")
 
@@ -52,7 +51,6 @@ def load_credentials():
     global _username, _password
     if _username is None or _password is None:
         # laod CVAT credentials from .env file or environment variables
-        load_dotenv()  # get environment variables from .env
         _username = os.getenv("CVAT_USERNAME")
         _password = os.getenv("CVAT_PASSWORD")
         assert _username is not None, "Environment variable 'CVAT_USERNAME' is not set."

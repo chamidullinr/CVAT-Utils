@@ -16,29 +16,29 @@ pip install --editable .
 ```
 
 ## Usage
-Before using `cvat_utils` create `.env` file with `CVAT_USERNAME` and `CVAT_PASSWORD` for accessing CVAT data.
+Before using `cvat-utils` create `.env` file with `CVAT_USERNAME` and `CVAT_PASSWORD` for accessing CVAT data.
 Example:
 ```
 CVAT_USERNAME=...
 CVAT_PASSWORD=...
 ```
 
-The `cvat_utils` package can be used either as CLI script or a python module.
-* Example of CLI script usage in bash: `cvat_utils --help`
-* Example of a python module usage in a python script: `import cvat_utils`
+The `cvat-utils` package can be used either as CLI script or a python module.
+* Example of CLI script usage in bash: `cvat-utils --help`
+* Example of a python module usage in a python script: `import cvat-utils`
 
 ### Downloading data from CVAT
 
 Download image metadata and all types of annotations:
 ```bash
-cvat_utils download \
+cvat-utils download \
   --task-ids [1,2,3] \
   --output-path output/dataset-1
 ```
 
 Download image metadata and all types of annotations and images:
 ```bash
-cvat_utils download \
+cvat-utils download \
   --task-ids [1,2,3] \
   --output-path output/dataset-1 \
   --load-images
@@ -46,7 +46,7 @@ cvat_utils download \
 
 Download image metadata and annotations of type `points` and `bboxes`:
 ```bash
-cvat_utils download \
+cvat-utils download \
   --task-ids [1,2,3] \
   --output-path output/dataset-1 \
   --points \
