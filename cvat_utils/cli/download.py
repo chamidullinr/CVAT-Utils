@@ -82,6 +82,7 @@ def process_annotation_record(
     process_polylines: bool = False,
     process_polygons: bool = False,
     process_bboxes: bool = False,
+    is_tag: bool = False,
 ) -> dict:
     """Process a single record with annotation from CVAT.
 
@@ -110,7 +111,7 @@ def process_annotation_record(
     -------
     A dictionary with processed annotation record.
     """
-    if annot["type"] in SUPPORTED_SHAPES:
+    if is_tag or annot["type"] in SUPPORTED_SHAPES:
         # map frame index into image id
         frame_id = annot["frame"]
         image_id = task_images[frame_id]["id"]
@@ -130,19 +131,27 @@ def process_annotation_record(
         attributes = {id2attrib[x["spec_id"]]: x["value"] for x in attributes}
 
         # process output
-        out = {
-            "image_id": image_id,
-            "type": annot["type"],
-            "label": label,
-            "attributes": attributes or None,
-        }
-        if annot["type"] == "polygon" and process_bboxes:
-            # store polygon record as bbox in COCO format [xmin, ymin, width, height]
-            out["bbox"] = polygon2bbox(annot["points"])
+        if is_tag:  # process tag
+            out = {
+                "image_id": image_id,
+                "type": "tag",
+                "label": label,
+                "attributes": attributes or None,
+            }
+        else:  # process shape
+            out = {
+                "image_id": image_id,
+                "type": annot["type"],
+                "label": label,
+                "attributes": attributes or None,
+            }
+            if annot["type"] == "polygon" and process_bboxes:
+                # store polygon record as bbox in COCO format [xmin, ymin, width, height]
+                out["bbox"] = polygon2bbox(annot["points"])
 
-        if process_points or process_polylines or process_polygons:
-            # store raw record
-            out["points"] = annot["points"]
+            if process_points or process_polylines or process_polygons:
+                # store raw record
+                out["points"] = annot["points"]
     else:
         error_monitor.log_error(f"Unknown annotation type: {annot['type']}")
         out = None
@@ -154,10 +163,11 @@ def get_task_metadata(
     task_id: int,
     *,
     error_monitor: ErrorMonitor,
-    points: bool = False,
-    polylines: bool = False,
-    polygons: bool = False,
-    bboxes: bool = False,
+    process_points: bool = False,
+    process_polylines: bool = False,
+    process_polygons: bool = False,
+    process_bboxes: bool = False,
+    process_tags: bool = False,
 ) -> Tuple[List[dict], List[dict]]:
     """Load image metadata and annotations for the given task ID.
 
@@ -167,14 +177,16 @@ def get_task_metadata(
         Task ID in CVAT to load the data from.
     error_monitor
         An instance of `ErrorMonitor` class for storing errors for later.
-    points
+    process_points
         If true process and return shapes of type `points`.
-    polylines
+    process_polylines
         If true process and return shapes of type `polyline`.
-    polygons
+    process_polygons
         If true process and return shapes of type `polygon`.
-    bboxes
+    process_bboxes
         If true process and return shapes of type `polygon` represented as a bounding box.
+    process_tags
+        If true process and return tags.
 
     Returns
     -------
@@ -200,7 +212,7 @@ def get_task_metadata(
         url = os.path.join(job["url"], "annotations")
         annotations = api_requests.get(url)
 
-        # process annotation records
+        # process annotation records (shapes)
         for annot in annotations["shapes"]:
             # add job id to the image records
             frame_id = annot["frame"]
@@ -213,13 +225,32 @@ def get_task_metadata(
                 id2label,
                 id2attrib,
                 error_monitor=error_monitor,
-                process_points=points,
-                process_polylines=polylines,
-                process_polygons=polygons,
-                process_bboxes=bboxes,
+                process_points=process_points,
+                process_polylines=process_polylines,
+                process_polygons=process_polygons,
+                process_bboxes=process_bboxes,
             )
             if out is not None:
                 task_annotations.append(out)
+
+        # process annotation records (tags)
+        if process_tags:
+            for annot in annotations["tags"]:
+                # add job id to the image records
+                frame_id = annot["frame"]
+                task_images[frame_id]["job_id"] = job["id"]
+
+                # process one record and store potential errors
+                out = process_annotation_record(
+                    annot,
+                    task_images,
+                    id2label,
+                    id2attrib,
+                    error_monitor=error_monitor,
+                    is_tag=True,
+                )
+                if out is not None:
+                    task_annotations.append(out)
 
     return task_images, task_annotations
 
@@ -233,6 +264,7 @@ def download_data(
     polylines: bool = False,
     polygons: bool = False,
     bboxes: bool = False,
+    tags: bool = False,
 ):
     """Download image metadata and annotations from CVAT and optionally images.
 
@@ -252,6 +284,8 @@ def download_data(
         If true process and return shapes of type `polygon`.
     bboxes
         If true process and return shapes of type `polygon` represented as a bounding box.
+    tags
+        If true process and return tags.
     """
     if not isinstance(task_ids, (list, tuple)):
         task_ids = [task_ids]
@@ -285,10 +319,11 @@ def download_data(
         task_images, task_annotations = get_task_metadata(
             task_id,
             error_monitor=error_monitor,
-            points=points,
-            polylines=polylines,
-            polygons=polygons,
-            bboxes=bboxes,
+            process_points=points,
+            process_polylines=polylines,
+            process_polygons=polygons,
+            process_bboxes=bboxes,
+            process_tags=tags,
         )
 
         # download images
@@ -340,4 +375,5 @@ if __name__ == "__main__":
         polylines=args.polylines,
         polygons=args.polygons,
         bboxes=args.bboxes,
+        tags=args.tags,
     )
