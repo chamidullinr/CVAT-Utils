@@ -1,0 +1,24 @@
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  standard:
+    format: "(%(name)s) %(levelname)s: %(message)s"
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: standard
+    stream: ext://sys.stdout
+
+loggers:
+  cvat_utils:
+    level: INFO
+    handlers: [ console ]
+    propagate: no
+
+  scripts:
+    level: INFO
+    handlers: [ console ]
+    propagate: no

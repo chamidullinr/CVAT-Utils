@@ -1,0 +1,2 @@
+include cvat_utils/config/*.yaml
+include cvat_utils/config/*.yml
