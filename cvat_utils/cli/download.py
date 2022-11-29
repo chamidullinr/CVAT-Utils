@@ -62,7 +62,8 @@ def load_args(args: list = None) -> argparse.Namespace:
     return args
 
 
-def polygon2bbox(points: list):
+def polygon2bbox(points: list) -> list:
+    """Convert list of polygon points into a bounding box in a COCO format [xmin, ymin, w, h]."""
     pts = np.array(points).reshape(-1, 2)
     xmin, xmax = pts[:, 0].min(), pts[:, 0].max()
     ymin, ymax = pts[:, 1].min(), pts[:, 1].max()
@@ -82,6 +83,33 @@ def process_annotation_record(
     process_polygons: bool = False,
     process_bboxes: bool = False,
 ) -> dict:
+    """Process a single record with annotation from CVAT.
+
+    Parameters
+    ----------
+    annot
+        A dictionary with annotation data from CVAT.
+    task_images
+        List of images in the current CVAT task.
+    id2label
+        A dictionary that maps label ids into label names.
+    id2attrib
+        A dictionary that maps attribute ids into attribute names.
+    error_monitor
+        An instance of `ErrorMonitor` class for storing errors for later.
+    process_points
+        If true process and return shapes of type `points`.
+    process_polylines
+        If true process and return shapes of type `polyline`.
+    process_polygons
+        If true process and return shapes of type `polygon`.
+    process_bboxes
+        If true process and return shapes of type `polygon` represented as a bounding box.
+
+    Returns
+    -------
+    A dictionary with processed annotation record.
+    """
     if annot["type"] in SUPPORTED_SHAPES:
         # map frame index into image id
         frame_id = annot["frame"]
@@ -131,6 +159,30 @@ def get_task_metadata(
     polygons: bool = False,
     bboxes: bool = False,
 ) -> Tuple[List[dict], List[dict]]:
+    """Load image metadata and annotations for the given task ID.
+
+    Parameters
+    ----------
+    task_id
+        Task ID in CVAT to load the data from.
+    error_monitor
+        An instance of `ErrorMonitor` class for storing errors for later.
+    points
+        If true process and return shapes of type `points`.
+    polylines
+        If true process and return shapes of type `polyline`.
+    polygons
+        If true process and return shapes of type `polygon`.
+    bboxes
+        If true process and return shapes of type `polygon` represented as a bounding box.
+
+    Returns
+    -------
+    task_images
+        A list with image metadata.
+    task_annotations
+        A list with annotations.
+    """
     # load task data from CVAT
     task, jobs, task_images = load_task_data(task_id)
     id2label = {x["id"]: x["name"] for x in task["labels"]}
@@ -182,6 +234,25 @@ def download_data(
     polygons: bool = False,
     bboxes: bool = False,
 ):
+    """Download image metadata and annotations from CVAT and optionally images.
+
+    Parameters
+    ----------
+    task_ids
+        Task IDs in CVAT to load the data from.
+    output_path
+        Output directory.
+    load_images
+        If true load images together with image and annotation metadata.
+    points
+        If true process and return shapes of type `points`.
+    polylines
+        If true process and return shapes of type `polyline`.
+    polygons
+        If true process and return shapes of type `polygon`.
+    bboxes
+        If true process and return shapes of type `polygon` represented as a bounding box.
+    """
     if not isinstance(task_ids, (list, tuple)):
         task_ids = [task_ids]
 
@@ -227,8 +298,7 @@ def download_data(
             # include image paths to the metadata
             # remove task-{id}/images prefix to get a file id
             fileid2filepath = {
-                x.split(".")[0].replace(f"task-{task_id}/images/", ""): x
-                for x in files
+                x.split(".")[0].replace(f"task-{task_id}/images/", ""): x for x in files
             }
             for x in task_images:
                 if x["id"] not in fileid2filepath:
