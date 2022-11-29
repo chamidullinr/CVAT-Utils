@@ -174,26 +174,14 @@ def get_task_metadata(
 
 def download_data(
     *,
-    task_ids: List[int] = None,
-    output_path: str = None,
+    task_ids: List[int],
+    output_path: str,
     images: bool = False,
     points: bool = False,
     polylines: bool = False,
     polygons: bool = False,
     bboxes: bool = False,
 ):
-    if task_ids is None or output_path is None:
-        # load script args
-        args = load_args()
-
-        task_ids = args.task_ids
-        output_path = args.output_path
-        images = args.images
-        points = args.points
-        polylines = args.polylines
-        polygons = args.polygons
-        bboxes = args.bboxes
-
     # create output paths
     os.makedirs(output_path, exist_ok=True)
     metadata_file = os.path.join(output_path, "metadata.json")
@@ -238,7 +226,7 @@ def download_data(
             for x in task_images:
                 if x["id"] not in fileid2filepath:
                     error_monitor.log_error(f"Some images in task {task_id} were not downloaded.")
-                x["file_path"] = fileid2filepath[x["id"]]
+                x["file_path"] = fileid2filepath.get(x["id"])
 
         images.extend(task_images)
         annotations.extend(task_annotations)
@@ -264,4 +252,15 @@ def download_data(
 
 
 if __name__ == "__main__":
-    download_data()
+    # load script args
+    args = load_args()
+
+    download_data(
+        task_ids=args.task_ids,
+        output_path=args.output_path,
+        images=args.images,
+        points=args.points,
+        polylines=args.polylines,
+        polygons=args.polygons,
+        bboxes=args.bboxes,
+    )

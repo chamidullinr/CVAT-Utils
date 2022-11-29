@@ -24,8 +24,8 @@ class ErrorMonitor:
 
     def log_error(self, msg: str):
         if msg not in self.errors:
-            self.errors = 0
-        self.errors += 1
+            self.errors[msg] = 0
+        self.errors[msg] += 1
 
     def print_errors(self):
         logger.warning(
