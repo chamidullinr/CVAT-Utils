@@ -5,7 +5,8 @@ import time
 import zipfile
 from typing import List, Tuple
 
-from cvat_utils import api_requests, utils
+from cvat_utils import api_requests
+from cvat_utils.utils import is_image
 
 logger = logging.getLogger("cvat_utils")
 
@@ -86,7 +87,7 @@ def download_images(task_id: int, output_path: str) -> list:
     os.makedirs(output_path, exist_ok=False)
     buffer = io.BytesIO(resp.content)
     with zipfile.ZipFile(buffer) as zip_ref:
-        files = [x for x in zip_ref.namelist() if utils.is_image(x)]
+        files = [x for x in zip_ref.namelist() if is_image(x)]
         zip_ref.extractall(output_path, members=files)
     files = [os.path.join(f"task-{task_id}", x) for x in files]
     # logger.info(f"Downloaded and extracted {len(files)} files to '{output_path}'.")
