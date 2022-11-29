@@ -8,17 +8,17 @@ formatters:
 handlers:
   console:
     class: logging.StreamHandler
-    level: DEBUG
+    level: INFO
     formatter: standard
     stream: ext://sys.stdout
 
 loggers:
   cvat_utils:
-    level: DEBUG
+    level: INFO
     handlers: [ console ]
     propagate: no
 
   script:
-    level: DEBUG
+    level: INFO
     handlers: [ console ]
     propagate: no
