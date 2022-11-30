@@ -290,6 +290,13 @@ def download_data(
     if not isinstance(task_ids, (list, tuple)):
         task_ids = [task_ids]
 
+    # check CVAT credentials
+    try:
+        api_requests.load_credentials()
+    except ValueError as e:
+        logger.error(e)
+        sys.exit(1)
+
     # create output paths
     os.makedirs(output_path, exist_ok=True)
     metadata_file = os.path.join(output_path, "metadata.json")

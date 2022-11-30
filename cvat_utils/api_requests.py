@@ -4,8 +4,9 @@ import os
 from typing import Union
 
 import requests
+from dotenv import load_dotenv
 
-logger = logging.getLogger("scripts")
+logger = logging.getLogger("cvat_utils")
 
 _username = None
 _password = None
@@ -50,11 +51,27 @@ def load_credentials():
     """
     global _username, _password
     if _username is None or _password is None:
-        # laod CVAT credentials from .env file or environment variables
+        # get environment variables from .env
+        is_success = load_dotenv()
+        if not is_success:
+            is_success = load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".env"))
+        logger.debug(f"Loaded environment files from `.env` file: {is_success}")
+
+        # get CVAT credentials from environment variables
         _username = os.getenv("CVAT_USERNAME")
         _password = os.getenv("CVAT_PASSWORD")
-        assert _username is not None, "Environment variable 'CVAT_USERNAME' is not set."
-        assert _password is not None, "Environment variable 'CVAT_PASSWORD' is not set."
+
+        if _username is None:
+            err = "Environment variable 'CVAT_USERNAME' is not set."
+            if not is_success:
+                err += " Did not find any `.env` file."
+            raise ValueError(err)
+
+        if _password is None:
+            err = "Environment variable 'CVAT_PASSWORD' is not set."
+            if not is_success:
+                err += " Did not find any `.env` file."
+            raise ValueError(err)
 
 
 def request(
