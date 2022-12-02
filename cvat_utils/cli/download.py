@@ -12,7 +12,7 @@ from cvat_utils import api_requests
 from cvat_utils.core import download_images, load_task_data
 from cvat_utils.utils import ErrorMonitor, to_json
 
-logger = logging.getLogger("scripts")
+logger = logging.getLogger("script")
 
 SUPPORTED_SHAPES = ("points", "polyline", "polygon")
 
@@ -149,7 +149,11 @@ def process_annotation_record(
                 # store polygon record as bbox in COCO format [xmin, ymin, width, height]
                 out["bbox"] = polygon2bbox(annot["points"])
 
-            if process_points or process_polylines or process_polygons:
+            if (
+                (annot["type"] == "points" and process_points)
+                or (annot["type"] == "polyline" and process_polylines)
+                or (annot["type"] == "polygon" and process_polygons)
+            ):
                 # store raw record
                 out["points"] = annot["points"]
     else:
