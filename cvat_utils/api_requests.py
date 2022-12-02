@@ -6,14 +6,10 @@ from typing import Union
 import requests
 from dotenv import load_dotenv
 
-logger = logging.getLogger("scripts")
+logger = logging.getLogger("cvat_utils")
 
-load_dotenv()  # get environment variables from .env
-
-USERNAME = os.getenv("CVAT_USERNAME")
-PASSWORD = os.getenv("CVAT_PASSWORD")
-assert USERNAME is not None, "Environment variable 'CVAT_USERNAME' is not set."
-assert PASSWORD is not None, "Environment variable 'CVAT_PASSWORD' is not set."
+_username = None
+_password = None
 
 
 def _load_content(resp: requests.Response) -> Union[dict, bytes]:
@@ -47,11 +43,47 @@ def _load_content(resp: requests.Response) -> Union[dict, bytes]:
     return out
 
 
-def get(url: str, load_content: bool = True, **kwargs) -> Union[dict, bytes, requests.Response]:
-    """Create GET request.
+def load_credentials():
+    """Load CVAT credentials from .env file or environment variables.
+
+    Username should be stored as `CVAT_USERNAME`.
+    Password should be stored as `CVAT_PASSWORD`.
+    """
+    global _username, _password
+    if _username is None or _password is None:
+        # get environment variables from .env
+        is_success = load_dotenv()
+        if not is_success:
+            is_success = load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".env"))
+        logger.debug(f"Loaded environment files from `.env` file: {is_success}")
+
+        # get CVAT credentials from environment variables
+        _username = os.getenv("CVAT_USERNAME")
+        _password = os.getenv("CVAT_PASSWORD")
+
+        if _username is None:
+            err = "Environment variable 'CVAT_USERNAME' is not set."
+            if not is_success:
+                err += " Did not find any `.env` file."
+            raise ValueError(err)
+
+        if _password is None:
+            err = "Environment variable 'CVAT_PASSWORD' is not set."
+            if not is_success:
+                err += " Did not find any `.env` file."
+            raise ValueError(err)
+
+
+def request(
+    method: str, url: str, load_content: bool = True, **kwargs
+) -> Union[dict, bytes, requests.Response]:
+    """Create HTTP request.
 
     Parameters
     ----------
+    method
+        Method for the new Request object.
+        One of `GET`, `OPTIONS`, `HEAD`, `POST`, `PUT`, `PATCH`, or `DELETE`.
     url
         URL for the new Request object.
     load_content
@@ -61,15 +93,24 @@ def get(url: str, load_content: bool = True, **kwargs) -> Union[dict, bytes, req
 
     Returns
     -------
-    A Response content as dictionary or bytes if load_content is true,
+    A Response content as a dictionary or bytes if load_content is true,
     otherwise a Response object.
     """
-    resp = requests.get(url, auth=(USERNAME, PASSWORD), **kwargs)
+    # load credentials from .env file or environment variables
+    load_credentials()
+
+    # call request
+    resp = requests.request(method, url, auth=(_username, _password), **kwargs)
     logger.debug(
         f"Received response with status code {resp.status_code} "
-        f"for GET request with url: {resp.url}"
+        f"for {method} request with url: {resp.url}"
     )
     return _load_content(resp) if load_content else resp
+
+
+def get(url: str, load_content: bool = True, **kwargs) -> Union[dict, bytes, requests.Response]:
+    """Create GET request to get data from CVAT."""
+    return request("GET", url, load_content, **kwargs)
 
 
 def patch(
@@ -79,38 +120,8 @@ def patch(
     load_content: bool = True,
     **kwargs,
 ) -> Union[dict, bytes, requests.Response]:
-    """Create PATCH request to update records in CVAT.
-
-    Parameters
-    ----------
-    url
-        URL for the new Request object.
-    params
-        A dictionary to send in the query string for the Request.
-    data
-        JSON data to send in the body of the Request.
-    load_content
-        If true return JSON content from Response object.
-    kwargs
-        Additional key arguments passed to `requests.patch` method.
-
-    Returns
-    -------
-    A Response content as dictionary or bytes if load_content is true,
-    otherwise a Response object.
-    """
-    resp = requests.patch(
-        url,
-        params=params,
-        json=data,
-        auth=(USERNAME, PASSWORD),
-        **kwargs,
-    )
-    logger.debug(
-        f"Received response with status code {resp.status_code} "
-        f"for PATCH request with url: {resp.url}"
-    )
-    return _load_content(resp) if load_content else resp
+    """Create PATCH request to update records in CVAT."""
+    return request("PATCH", url, load_content, params=params, json=data, **kwargs)
 
 
 def put(
@@ -120,38 +131,8 @@ def put(
     load_content: bool = True,
     **kwargs,
 ) -> Union[dict, bytes, requests.Response]:
-    """Create PUT request to update records in CVAT.
-
-    Parameters
-    ----------
-    url
-        URL for the new Request object.
-    params
-        A dictionary to send in the query string for the Request.
-    data
-        JSON data to send in the body of the Request.
-    load_content
-        If true return JSON content from Response object.
-    kwargs
-        Additional key arguments passed to `requests.put` method.
-
-    Returns
-    -------
-    A Response content as dictionary or bytes if load_content is true,
-    otherwise a Response object.
-    """
-    resp = requests.put(
-        url,
-        params=params,
-        json=data,
-        auth=(USERNAME, PASSWORD),
-        **kwargs,
-    )
-    logger.debug(
-        f"Received response with status code {resp.status_code} "
-        f"for PUT request with url: {resp.url}"
-    )
-    return _load_content(resp) if load_content else resp
+    """Create PUT request to update records in CVAT."""
+    return request("PUT", url, load_content, params=params, json=data, **kwargs)
 
 
 def post(
@@ -161,35 +142,5 @@ def post(
     load_content: bool = True,
     **kwargs,
 ) -> Union[dict, bytes, requests.Response]:
-    """Create POST request to update records in CVAT.
-
-    Parameters
-    ----------
-    url
-        URL for the new Request object.
-    params
-        A dictionary to send in the query string for the Request.
-    data
-        JSON data to send in the body of the Request.
-    load_content
-        If true return JSON content from Response object.
-    kwargs
-        Additional key arguments passed to `requests.post` method.
-
-    Returns
-    -------
-    A Response content as dictionary or bytes if load_content is true,
-    otherwise a Response object.
-    """
-    resp = requests.post(
-        url,
-        params=params,
-        json=data,
-        auth=(USERNAME, PASSWORD),
-        **kwargs,
-    )
-    logger.debug(
-        f"Received response with status code {resp.status_code} "
-        f"for POST request with url: {resp.url}"
-    )
-    return _load_content(resp) if load_content else resp
+    """Create POST request to update records in CVAT."""
+    return request("POST", url, load_content, params=params, json=data, **kwargs)
