@@ -1,9 +1,10 @@
 import argparse
 import logging
 import os
+import shutil
 import sys
 from datetime import datetime
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 from tqdm.auto import tqdm
@@ -58,6 +59,12 @@ def load_args(args: list = None) -> argparse.Namespace:
         help="If selected the script will include bbox annotations from polygon in the export.",
         action="store_true",
     )
+    parser.add_argument(
+        "--all-jobs",
+        help="If selected the script will include all jobs regardless the status. "
+        "By default the script includes only jobs with status=completed",
+        action="store_true",
+    )
     args = parser.parse_args(args)
     return args
 
@@ -73,7 +80,7 @@ def polygon2bbox(points: list) -> list:
 
 def process_annotation_record(
     annot: dict,
-    task_images: List[dict],
+    task_images: Dict[str, dict],
     id2label: dict,
     id2attrib: dict,
     *,
@@ -91,7 +98,8 @@ def process_annotation_record(
     annot
         A dictionary with annotation data from CVAT.
     task_images
-        List of images in the current CVAT task.
+        Dictionary of images in the current CVAT task.
+        Keys correspond to frame ids in the task and values contain dictionary with image metadata.
     id2label
         A dictionary that maps label ids into label names.
     id2attrib
@@ -106,6 +114,8 @@ def process_annotation_record(
         If true process and return shapes of type `polygon`.
     process_bboxes
         If true process and return shapes of type `polygon` represented as a bounding box.
+    is_tag
+        If true process as a tag object instead of shape or track objects.
 
     Returns
     -------
@@ -172,6 +182,7 @@ def get_task_metadata(
     process_polygons: bool = False,
     process_bboxes: bool = False,
     process_tags: bool = False,
+    all_jobs: bool = False,
 ) -> Tuple[List[dict], List[dict]]:
     """Load image metadata and annotations for the given task ID.
 
@@ -191,6 +202,9 @@ def get_task_metadata(
         If true process and return shapes of type `polygon` represented as a bounding box.
     process_tags
         If true process and return tags.
+    all_jobs
+        If true include all jobs regardless the status.
+        By default, include only jobs with status=completed.
 
     Returns
     -------
@@ -209,20 +223,23 @@ def get_task_metadata(
         for attr in x["attributes"]
     }
 
-    # load individual jobs and get annotations
+    # drop task images from jobs that are not completed yet
+    if not all_jobs:
+        task_images = {k: v for k, v in task_images.items() if v["status"] == "completed"}
+
+    # load annotation data from individual jobs
     task_annotations = []
     for i, job in enumerate(jobs):
+        # skip if the job is not completed yet
+        if not all_jobs and job["status"] != "completed":
+            continue
+
         # load annotations for a specific job
         url = os.path.join(job["url"], "annotations")
         annotations = api_requests.get(url)
 
-        # process annotation records (shapes)
+        # process annotation records (shapes) and store potential errors
         for annot in annotations["shapes"]:
-            # add job id to the image records
-            frame_id = annot["frame"]
-            task_images[frame_id]["job_id"] = job["id"]
-
-            # process one record and store potential errors
             out = process_annotation_record(
                 annot,
                 task_images,
@@ -237,14 +254,9 @@ def get_task_metadata(
             if out is not None:
                 task_annotations.append(out)
 
-        # process annotation records (tags)
+        # process annotation records (tags) and store potential errors
         if process_tags:
             for annot in annotations["tags"]:
-                # add job id to the image records
-                frame_id = annot["frame"]
-                task_images[frame_id]["job_id"] = job["id"]
-
-                # process one record and store potential errors
                 out = process_annotation_record(
                     annot,
                     task_images,
@@ -255,6 +267,9 @@ def get_task_metadata(
                 )
                 if out is not None:
                     task_annotations.append(out)
+
+    # convert task images to list
+    task_images = list(task_images.values())
 
     return task_images, task_annotations
 
@@ -269,6 +284,7 @@ def download_data(
     polygons: bool = False,
     bboxes: bool = False,
     tags: bool = False,
+    all_jobs: bool = False,
 ):
     """Download image metadata and annotations from CVAT and optionally images.
 
@@ -290,6 +306,9 @@ def download_data(
         If true process and return shapes of type `polygon` represented as a bounding box.
     tags
         If true process and return tags.
+    all_jobs
+        If true include all jobs regardless the status.
+        By default, include only jobs with status=completed.
     """
     if not isinstance(task_ids, (list, tuple)):
         task_ids = [task_ids]
@@ -308,10 +327,12 @@ def download_data(
         logger.warning(f"Directory {output_path} already has metadata.json file. Exiting.")
         sys.exit(0)
 
-    images_path = None
+    images_path, images_tmp_path = None, None
     if load_images:
         images_path = os.path.join(output_path, "images")
+        images_tmp_path = os.path.join(output_path, "images_tmp")
         os.makedirs(images_path, exist_ok=True)
+        os.makedirs(images_tmp_path, exist_ok=False)
 
     # check filter arguments (at least one of them should be True)
     if not points and not polylines and not polygons and not bboxes:
@@ -335,21 +356,42 @@ def download_data(
             process_polygons=polygons,
             process_bboxes=bboxes,
             process_tags=tags,
+            all_jobs=all_jobs,
         )
 
         # download images
         if load_images:
-            files = download_images(task_id, images_path)
+            # download images to the temporary directory
+            files = download_images(task_id, images_tmp_path)
 
-            # include image paths to the metadata
+            # align downloaded images with metadata
             # remove task-{id}/images prefix to get a file id
-            fileid2filepath = {
+            imageid2filepath = {
                 x.split(".")[0].replace(f"task-{task_id}/images/", ""): x for x in files
             }
-            for x in task_images:
-                if x["id"] not in fileid2filepath:
+            for image_data in task_images:
+                image_id = image_data["id"]
+                if image_id not in imageid2filepath:
                     error_monitor.log_error(f"Some images in task {task_id} were not downloaded.")
-                x["file_path"] = fileid2filepath.get(x["id"])
+                    image_data["file_path"] = None
+                else:
+                    file_path = imageid2filepath[image_id]
+                    image_ext = image_data["file_name"].split(".")[-1]
+                    new_file_path = f"task-{task_id}/{image_id}.{image_ext}"
+
+                    # move to the image directory
+                    trg = os.path.join(images_path, new_file_path)
+                    os.makedirs(os.path.dirname(trg), exist_ok=True)
+                    os.rename(
+                        os.path.join(images_tmp_path, file_path),
+                        trg,
+                    )
+
+                    # include image paths to the metadata
+                    image_data["file_path"] = new_file_path
+
+            # remove temporary directory with unused images
+            shutil.rmtree(images_tmp_path)
 
         images.extend(task_images)
         annotations.extend(task_annotations)
@@ -373,6 +415,9 @@ def download_data(
     }
     to_json(metadata, metadata_file)
 
+    if error_monitor.has_errors():
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     # load script args
@@ -387,4 +432,5 @@ if __name__ == "__main__":
         polygons=args.polygons,
         bboxes=args.bboxes,
         tags=args.tags,
+        all_jobs=args.all_jobs,
     )

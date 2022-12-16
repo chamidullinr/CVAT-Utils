@@ -3,7 +3,7 @@ import logging
 import os
 import time
 import zipfile
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 from cvat_utils import api_requests
 from cvat_utils.utils import is_image
@@ -11,7 +11,7 @@ from cvat_utils.utils import is_image
 logger = logging.getLogger("cvat_utils")
 
 
-def load_task_data(task_id: int) -> Tuple[dict, List[dict], List[dict]]:
+def load_task_data(task_id: int) -> Tuple[dict, List[dict], Dict[str, dict]]:
     """Load task metadata from CVAT."""
     # load annotation data from CVAT
     task_url = f"https://cvat.piva-ai.com/api/v1/tasks/{task_id}"
@@ -19,6 +19,9 @@ def load_task_data(task_id: int) -> Tuple[dict, List[dict], List[dict]]:
     meta = api_requests.get(task_url + "/data/meta")
 
     # get list of jobs in the task
+    assert all(
+        [len(x["jobs"]) == 1 for x in task["segments"]]
+    ), "Unexpected CVAT data: one segment has multiple jobs."
     jobs = [
         {
             "id": job["id"],
@@ -32,17 +35,31 @@ def load_task_data(task_id: int) -> Tuple[dict, List[dict], List[dict]]:
     ]
 
     # get list of frames
-    frames = [
-        {
-            "id": x["name"].split(".")[0],
+    frame_ids_range = range(meta["start_frame"], meta["stop_frame"] + 1)
+    frames = {
+        frame_id: {  # frame id should be unique in the current task only
+            "id": x["name"].split(".")[0],  # id should be unique across the whole dataset
             "file_name": x["name"].split("/")[-1],
             "width": x["width"],
             "height": x["height"],
             "task_id": task_id,
             "task_name": task["name"],
         }
-        for x in meta["frames"]
-    ]
+        for frame_id, x in zip(frame_ids_range, meta["frames"])
+    }
+
+    # add job ids to the frames
+    for job_data in jobs:
+        for frame_id in range(job_data["start_frame"], job_data["stop_frame"] + 1):
+            assert (
+                frame_id in frames
+            ), f"Unexpected CVAT data: job ({job_data['id']}) is missing a frame ({frame_id})."
+            frames[frame_id]["job_id"] = job_data["id"]
+            frames[frame_id]["status"] = job_data["status"]
+    for frame_id, frame_data in frames.items():
+        assert (
+            "job_id" in frame_data
+        ), f"Unexpected CVAT data: frame ({frame_id}) is missing job id."
 
     return task, jobs, frames
 

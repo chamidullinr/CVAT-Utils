@@ -39,3 +39,7 @@ class ErrorMonitor:
             logger.warning(
                 f"Found the following errors during processing: {json.dumps(self.errors, indent=4)}"
             )
+
+    def has_errors(self) -> bool:
+        """Return true if any errors were logged to the error monitor."""
+        return len(self.errors) > 0
