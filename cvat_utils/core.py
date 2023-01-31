@@ -4,7 +4,7 @@ import os
 import time
 import warnings
 import zipfile
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 from cvat_utils import api_requests
 from cvat_utils.models import Frame, FullProject, FullTask, FullTaskMetadata, Job, Task
@@ -44,14 +44,21 @@ def _load_task_metadata(task_id: int) -> FullTaskMetadata:
     return meta
 
 
-def load_project_data(project_id: int) -> Tuple[FullProject, List[Task]]:
+def load_project_data(
+    project_id: int, *, return_dict: bool = False
+) -> Tuple[Union[FullProject, dict], List[Union[Task, dict]]]:
     """Load project metadata from CVAT."""
     project = _load_project(project_id)
     tasks = [Task(**x.dict()) for x in project.tasks]  # get list of tasks in the project
+    if return_dict:
+        project = project.dict()
+        tasks = [x.dict() for x in tasks]
     return project, tasks
 
 
-def load_task_data(task_id: int) -> Tuple[FullTask, List[Job], Dict[str, Frame]]:
+def load_task_data(
+    task_id: int, *, return_dict: bool = False
+) -> Tuple[Union[FullTask, dict], List[Union[Job, dict]], Dict[str, Union[Frame, dict]]]:
     """Load task metadata from CVAT."""
     # load annotation data from CVAT
     task = _load_task(task_id)
@@ -93,6 +100,11 @@ def load_task_data(task_id: int) -> Tuple[FullTask, List[Job], Dict[str, Frame]]
         assert (
             "job_id" in frame_data
         ), f"Unexpected CVAT data: frame ({frame_id}) is missing job id."
+
+    if return_dict:
+        task = task.dict()
+        jobs = [x.dict() for x in jobs]
+        frames = {k: v.dict() for k, v in frames.items()}
 
     return task, jobs, frames
 
