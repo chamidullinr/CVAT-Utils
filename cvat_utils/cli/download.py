@@ -9,8 +9,8 @@ from typing import Dict, List, Tuple
 import numpy as np
 from tqdm.auto import tqdm
 
-from cvat_utils import api_requests
-from cvat_utils.core import download_images, load_task_data
+from cvat_utils import api_requests, download_images, load_task_data
+from cvat_utils.models import Frame
 from cvat_utils.utils import ErrorMonitor, to_json
 
 logger = logging.getLogger("script")
@@ -80,7 +80,7 @@ def polygon2bbox(points: list) -> list:
 
 def process_annotation_record(
     annot: dict,
-    task_images: Dict[str, dict],
+    task_images: Dict[str, Frame],
     id2label: dict,
     id2attrib: dict,
     *,
@@ -124,7 +124,7 @@ def process_annotation_record(
     if is_tag or annot["type"] in SUPPORTED_SHAPES:
         # map frame index into image id
         frame_id = annot["frame"]
-        image_id = task_images[frame_id]["id"]
+        image_id = task_images[frame_id.id]
 
         # map label id into label name
         assert (
@@ -215,27 +215,22 @@ def get_task_metadata(
     """
     # load task data from CVAT
     task, jobs, task_images = load_task_data(task_id)
-    id2label = {x["id"]: x["name"] for x in task["labels"]}
-    id2attrib = {
-        attr["id"]: attr["name"]
-        for x in task["labels"]
-        if "attributes" in x
-        for attr in x["attributes"]
-    }
+    id2label = {x.id: x.name for x in task.labels}
+    id2attrib = {attr["id"]: attr["name"] for x in task.labels for attr in x.attributes}
 
     # drop task images from jobs that are not completed yet
     if not all_jobs:
-        task_images = {k: v for k, v in task_images.items() if v["status"] == "completed"}
+        task_images = {k: v for k, v in task_images.items() if v.status == "completed"}
 
     # load annotation data from individual jobs
     task_annotations = []
     for i, job in enumerate(jobs):
         # skip if the job is not completed yet
-        if not all_jobs and job["status"] != "completed":
+        if not all_jobs and job.status != "completed":
             continue
 
         # load annotations for a specific job
-        url = os.path.join(job["url"], "annotations")
+        url = os.path.join(job.url, "annotations")
         annotations = api_requests.get(url)
 
         # process annotation records (shapes) and store potential errors
@@ -270,6 +265,9 @@ def get_task_metadata(
 
     # convert task images to list
     task_images = list(task_images.values())
+
+    # convert to dict
+    task_images = [x.dict() for x in task_images]
 
     return task_images, task_annotations
 

@@ -2,60 +2,93 @@ import io
 import logging
 import os
 import time
+import warnings
 import zipfile
 from typing import Dict, List, Tuple
 
 from cvat_utils import api_requests
+from cvat_utils.models import Frame, FullProject, FullTask, FullTaskMetadata, Job, Task
 from cvat_utils.utils import is_image
 
 logger = logging.getLogger("cvat_utils")
 
 
-def load_task_data(task_id: int) -> Tuple[dict, List[dict], Dict[str, dict]]:
+def _load_project(project_id: int) -> FullProject:
+    project_url = f"https://cvat.piva-ai.com/api/v1/projects/{project_id}"
+    project_dict = api_requests.get(project_url)
+    project = FullProject(**project_dict)
+    if project.dict() != project_dict:
+        warnings.warn(
+            "Project model in the library doesn't equal to the model returned by CVAT API."
+        )
+    return project
+
+
+def _load_task(task_id: int) -> FullTask:
+    task_url = f"https://cvat.piva-ai.com/api/v1/tasks/{task_id}"
+    task_dict = api_requests.get(task_url)
+    task = FullTask(**task_dict)
+    if task.dict() != task_dict:
+        warnings.warn("Task model in the library doesn't equal to the model returned by CVAT API.")
+    return task
+
+
+def _load_task_metadata(task_id: int) -> FullTaskMetadata:
+    task_meta_url = f"https://cvat.piva-ai.com/api/v1/tasks/{task_id}/data/meta"
+    meta_dict = api_requests.get(task_meta_url)
+    meta = FullTaskMetadata(**meta_dict)
+    if meta.dict() != meta_dict:
+        warnings.warn(
+            "Task Metadata model in the library doesn't equal to the model returned by CVAT API."
+        )
+    return meta
+
+
+def load_project_data(project_id: int) -> Tuple[FullProject, List[Task]]:
+    """Load project metadata from CVAT."""
+    project = _load_project(project_id)
+    tasks = [Task(**x.dict()) for x in project.tasks]  # get list of tasks in the project
+    return project, tasks
+
+
+def load_task_data(task_id: int) -> Tuple[FullTask, List[Job], Dict[str, Frame]]:
     """Load task metadata from CVAT."""
     # load annotation data from CVAT
-    task_url = f"https://cvat.piva-ai.com/api/v1/tasks/{task_id}"
-    task = api_requests.get(task_url)
-    meta = api_requests.get(task_url + "/data/meta")
+    task = _load_task(task_id)
+    meta = _load_task_metadata(task_id)
 
     # get list of jobs in the task
     assert all(
-        [len(x["jobs"]) == 1 for x in task["segments"]]
+        [len(x.jobs) == 1 for x in task.segments]
     ), "Unexpected CVAT data: one segment has multiple jobs."
     jobs = [
-        {
-            "id": job["id"],
-            "url": job["url"].replace("http://", "https://"),
-            "status": job["status"],
-            "start_frame": segment["start_frame"],
-            "stop_frame": segment["stop_frame"],
-        }
-        for segment in task["segments"]
-        for job in segment["jobs"]
+        Job(**job.dict(), start_frame=segment.start_frame, stop_frame=segment.stop_frame)
+        for segment in task.segments
+        for job in segment.jobs
     ]
 
     # get list of frames
-    frame_ids_range = range(meta["start_frame"], meta["stop_frame"] + 1)
+    frame_ids_range = range(meta.start_frame, meta.stop_frame + 1)
     frames = {
-        frame_id: {  # frame id should be unique in the current task only
-            "id": x["name"].split(".")[0],  # id should be unique across the whole dataset
-            "file_name": x["name"].split("/")[-1],
-            "width": x["width"],
-            "height": x["height"],
-            "task_id": task_id,
-            "task_name": task["name"],
-        }
-        for frame_id, x in zip(frame_ids_range, meta["frames"])
+        frame_id: Frame(  # frame id should be unique in the current task only
+            id=x.name.split(".")[0],  # id should be unique across the whole dataset
+            file_name=x.name.split("/")[-1],
+            width=x.width,
+            height=x.height,
+            task_id=task_id,
+            task_name=task.name,
+        )
+        for frame_id, x in zip(frame_ids_range, meta.frames)
     }
 
     # add job ids to the frames
     for job_data in jobs:
-        for frame_id in range(job_data["start_frame"], job_data["stop_frame"] + 1):
+        for frame_id in range(job_data.start_frame, job_data.stop_frame + 1):
             assert (
                 frame_id in frames
-            ), f"Unexpected CVAT data: job ({job_data['id']}) is missing a frame ({frame_id})."
-            frames[frame_id]["job_id"] = job_data["id"]
-            frames[frame_id]["status"] = job_data["status"]
+            ), f"Unexpected CVAT data: job ({job_data.id}) is missing a frame ({frame_id})."
+            frames[frame_id].job_id = job_data.id
+            frames[frame_id].status = job_data.status
     for frame_id, frame_data in frames.items():
         assert (
             "job_id" in frame_data
@@ -64,7 +97,7 @@ def load_task_data(task_id: int) -> Tuple[dict, List[dict], Dict[str, dict]]:
     return task, jobs, frames
 
 
-def download_images(task_id: int, output_path: str) -> list:
+def download_images(task_id: int, output_path: str) -> List[str]:
     """Download images from CVAT and save them to a local directory.
 
     Parameters
