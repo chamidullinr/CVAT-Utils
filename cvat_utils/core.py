@@ -7,7 +7,15 @@ import zipfile
 from typing import Dict, List, Tuple, Union
 
 from cvat_utils import api_requests
-from cvat_utils.models import Frame, FullProject, FullTask, FullTaskMetadata, Job, Task
+from cvat_utils.models import (
+    Frame,
+    FullAnnotations,
+    FullProject,
+    FullTask,
+    FullTaskMetadata,
+    Job,
+    Task,
+)
 from cvat_utils.utils import is_image
 
 logger = logging.getLogger("cvat_utils")
@@ -58,7 +66,7 @@ def load_project_data(
 
 def load_task_data(
     task_id: int, *, return_dict: bool = False
-) -> Tuple[Union[FullTask, dict], List[Union[Job, dict]], Dict[str, Union[Frame, dict]]]:
+) -> Tuple[Union[FullTask, dict], List[Union[Job, dict]], Dict[int, Union[Frame, dict]]]:
     """Load task metadata from CVAT."""
     # load annotation data from CVAT
     task = _load_task(task_id)
@@ -107,6 +115,26 @@ def load_task_data(
         frames = {k: v.dict() for k, v in frames.items()}
 
     return task, jobs, frames
+
+
+def load_annotations(
+    job: Union[Job, dict], *, return_dict: bool = False
+) -> Union[FullAnnotations, dict]:
+    """Load annotations from a single job in CVAT."""
+    if isinstance(job, Job):
+        job_url = job.url
+    else:
+        assert "url" in job
+        job_url = job["url"]
+    annotations_dict = api_requests.get(os.path.join(job_url, "annotations"))
+    annotations = FullAnnotations(**annotations_dict)
+    if annotations.dict() != annotations_dict:
+        warnings.warn(
+            "Annotations model in the library doesn't equal to the model returned by CVAT API."
+        )
+    if return_dict:
+        annotations = annotations.dict()
+    return annotations
 
 
 def download_images(task_id: int, output_path: str) -> List[str]:

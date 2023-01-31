@@ -122,3 +122,32 @@ class FullProject(BaseModel):
     status: str
     training_project: Optional[Any]
     dimension: str
+
+
+class FullTag(BaseModel):
+    id: int
+    frame: int
+    label_id: int
+    group: int
+    source: str
+    attributes: List[dict]
+
+
+class FullShape(BaseModel):
+    id: int
+    frame: int
+    label_id: int
+    group: int
+    source: str
+    attributes: List[dict]
+    type: str
+    occluded: bool
+    z_order: int
+    points: list
+
+
+class FullAnnotations(BaseModel):
+    version: int
+    tags: List[FullTag]
+    shapes: List[FullShape]
+    tracks: list  # TODO - add FullTrack

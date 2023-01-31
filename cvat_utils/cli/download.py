@@ -4,13 +4,13 @@ import os
 import shutil
 import sys
 from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 from tqdm.auto import tqdm
 
-from cvat_utils import api_requests, download_images, load_task_data
-from cvat_utils.models import Frame
+from cvat_utils import download_images, load_annotations, load_credentials, load_task_data
+from cvat_utils.models import Frame, FullShape, FullTag
 from cvat_utils.utils import ErrorMonitor, to_json
 
 logger = logging.getLogger("script")
@@ -79,8 +79,8 @@ def polygon2bbox(points: list) -> list:
 
 
 def process_annotation_record(
-    annot: dict,
-    task_images: Dict[str, Frame],
+    annot: Union[FullShape, FullTag],
+    task_images: Dict[int, Frame],
     id2label: dict,
     id2attrib: dict,
     *,
@@ -89,7 +89,6 @@ def process_annotation_record(
     process_polylines: bool = False,
     process_polygons: bool = False,
     process_bboxes: bool = False,
-    is_tag: bool = False,
 ) -> dict:
     """Process a single record with annotation from CVAT.
 
@@ -114,31 +113,26 @@ def process_annotation_record(
         If true process and return shapes of type `polygon`.
     process_bboxes
         If true process and return shapes of type `polygon` represented as a bounding box.
-    is_tag
-        If true process as a tag object instead of shape or track objects.
 
     Returns
     -------
     A dictionary with processed annotation record.
     """
-    if is_tag or annot["type"] in SUPPORTED_SHAPES:
+    is_tag = isinstance(annot, FullTag)
+    if is_tag or annot.type in SUPPORTED_SHAPES:
         # map frame index into image id
-        frame_id = annot["frame"]
-        image_id = task_images[frame_id.id]
+        image_id = task_images[annot.frame].id
 
         # map label id into label name
-        assert (
-            annot["label_id"] in id2label
-        ), f"Error in CVAT - unknown label id {annot['label_id']}"
-        label = id2label[annot["label_id"]]
+        assert annot.label_id in id2label, f"Error in CVAT - unknown label id {annot.label_id}"
+        label = id2label[annot.label_id]
 
         # map attribute ids into attribute names
-        attributes = annot.get("attributes", [])
-        for attr in attributes:
+        for attr in annot.attributes:
             assert (
                 attr["spec_id"] in id2attrib
             ), f"Error in CVAT - unknown attribute id {attr['spec_id']}"
-        attributes = {id2attrib[x["spec_id"]]: x["value"] for x in attributes}
+        attributes = {id2attrib[x["spec_id"]]: x["value"] for x in annot.attributes}
 
         # process output
         if is_tag:  # process tag
@@ -151,23 +145,23 @@ def process_annotation_record(
         else:  # process shape
             out = {
                 "image_id": image_id,
-                "type": annot["type"],
+                "type": annot.type,
                 "label": label,
                 "attributes": attributes or None,
             }
-            if annot["type"] == "polygon" and process_bboxes:
+            if annot.type == "polygon" and process_bboxes:
                 # store polygon record as bbox in COCO format [xmin, ymin, width, height]
-                out["bbox"] = polygon2bbox(annot["points"])
+                out["bbox"] = polygon2bbox(annot.points)
 
             if (
-                (annot["type"] == "points" and process_points)
-                or (annot["type"] == "polyline" and process_polylines)
-                or (annot["type"] == "polygon" and process_polygons)
+                (annot.type == "points" and process_points)
+                or (annot.type == "polyline" and process_polylines)
+                or (annot.type == "polygon" and process_polygons)
             ):
                 # store raw record
-                out["points"] = annot["points"]
+                out["points"] = annot.points
     else:
-        error_monitor.log_error(f"Unknown annotation type: {annot['type']}")
+        error_monitor.log_error(f"Unknown annotation type: {annot.type}")
         out = None
 
     return out
@@ -230,11 +224,10 @@ def get_task_metadata(
             continue
 
         # load annotations for a specific job
-        url = os.path.join(job.url, "annotations")
-        annotations = api_requests.get(url)
+        annotations = load_annotations(job)
 
         # process annotation records (shapes) and store potential errors
-        for annot in annotations["shapes"]:
+        for annot in annotations.shapes:
             out = process_annotation_record(
                 annot,
                 task_images,
@@ -251,14 +244,13 @@ def get_task_metadata(
 
         # process annotation records (tags) and store potential errors
         if process_tags:
-            for annot in annotations["tags"]:
+            for annot in annotations.tags:
                 out = process_annotation_record(
                     annot,
                     task_images,
                     id2label,
                     id2attrib,
                     error_monitor=error_monitor,
-                    is_tag=True,
                 )
                 if out is not None:
                     task_annotations.append(out)
@@ -313,7 +305,7 @@ def download_data(
 
     # check CVAT credentials
     try:
-        api_requests.load_credentials()
+        load_credentials()
     except ValueError as e:
         logger.error(e)
         sys.exit(1)
