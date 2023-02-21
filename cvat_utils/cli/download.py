@@ -346,6 +346,8 @@ def download_data(
         images_path = os.path.join(output_path, "images")
         images_tmp_path = os.path.join(output_path, "images_tmp")
         os.makedirs(images_path, exist_ok=True)
+        if os.path.isdir(images_tmp_path):
+            shutil.rmtree(images_tmp_path)
         os.makedirs(images_tmp_path, exist_ok=False)
 
     # check filter arguments (at least one of them should be True)
