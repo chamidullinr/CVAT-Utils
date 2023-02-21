@@ -37,6 +37,7 @@ def save_metadata(
     test_size
         If split_dataset=true specifies size in % of the test set.
     """
+    assert "info" in metadata
     assert "images" in metadata
     assert "annotations" in metadata
     images = metadata["images"]
