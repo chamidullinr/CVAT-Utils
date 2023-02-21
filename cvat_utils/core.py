@@ -7,6 +7,7 @@ import zipfile
 from typing import Dict, List, Tuple, Union
 
 from cvat_utils import api_requests
+from cvat_utils.config import API_URL
 from cvat_utils.models import (
     Frame,
     FullAnnotations,
@@ -22,7 +23,7 @@ logger = logging.getLogger("cvat_utils")
 
 
 def _load_project(project_id: int) -> FullProject:
-    project_url = f"https://cvat.piva-ai.com/api/v1/projects/{project_id}"
+    project_url = f"{API_URL}/projects/{project_id}"
     project_dict = api_requests.get(project_url)
     project = FullProject(**project_dict)
     if project.dict() != project_dict:
@@ -33,7 +34,7 @@ def _load_project(project_id: int) -> FullProject:
 
 
 def _load_task(task_id: int) -> FullTask:
-    task_url = f"https://cvat.piva-ai.com/api/v1/tasks/{task_id}"
+    task_url = f"{API_URL}/tasks/{task_id}"
     task_dict = api_requests.get(task_url)
     task = FullTask(**task_dict)
     if task.dict() != task_dict:
@@ -42,7 +43,7 @@ def _load_task(task_id: int) -> FullTask:
 
 
 def _load_task_metadata(task_id: int) -> FullTaskMetadata:
-    task_meta_url = f"https://cvat.piva-ai.com/api/v1/tasks/{task_id}/data/meta"
+    task_meta_url = f"{API_URL}/tasks/{task_id}/data/meta"
     meta_dict = api_requests.get(task_meta_url)
     meta = FullTaskMetadata(**meta_dict)
     if meta.dict() != meta_dict:
@@ -57,7 +58,9 @@ def load_project_data(
 ) -> Tuple[Union[FullProject, dict], List[Union[Task, dict]]]:
     """Load project metadata from CVAT."""
     project = _load_project(project_id)
-    tasks = [Task(**x.dict()) for x in project.tasks]  # get list of tasks in the project
+    tasks = [
+        Task(**_load_task(task_id).dict()) for task_id in project.tasks
+    ]  # get list of tasks in the project
     if return_dict:
         project = project.dict()
         tasks = [x.dict() for x in tasks]
@@ -106,7 +109,7 @@ def load_task_data(
             frames[frame_id].status = job_data.status
     for frame_id, frame_data in frames.items():
         assert (
-            "job_id" in frame_data
+            frame_data.job_id is not None
         ), f"Unexpected CVAT data: frame ({frame_id}) is missing job id."
 
     if return_dict:
@@ -151,7 +154,7 @@ def download_images(task_id: int, output_path: str) -> List[str]:
     -------
     A list of downloaded images.
     """
-    url = f"https://cvat.piva-ai.com/api/v1/tasks/{task_id}/dataset"
+    url = f"{API_URL}/tasks/{task_id}/dataset"
 
     # create request and wait till 201 (created) status code
     while True:

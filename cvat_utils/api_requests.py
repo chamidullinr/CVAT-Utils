@@ -52,9 +52,7 @@ def load_credentials():
     global _username, _password
     if _username is None or _password is None:
         # get environment variables from .env
-        is_success = load_dotenv()
-        if not is_success:
-            is_success = load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".env"))
+        is_success = load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".env"))
         logger.debug(f"Loaded environment files from `.env` file: {is_success}")
 
         # get CVAT credentials from environment variables

@@ -7,15 +7,14 @@ from datetime import datetime
 from typing import Dict, List, Tuple, Union
 
 import numpy as np
+from pydantic import validate_arguments
 from tqdm.auto import tqdm
 
 from cvat_utils import download_images, load_annotations, load_credentials, load_task_data
-from cvat_utils.models import Frame, FullShape, FullTag
+from cvat_utils.models import Frame, FullShape, FullTag, FullTrack, FullTrackShape
 from cvat_utils.utils import ErrorMonitor, to_json
 
 logger = logging.getLogger("script")
-
-SUPPORTED_SHAPES = ("points", "polyline", "polygon")
 
 
 def load_args(args: list = None) -> argparse.Namespace:
@@ -78,93 +77,119 @@ def polygon2bbox(points: list) -> list:
     return bbox
 
 
-def process_annotation_record(
-    annot: Union[FullShape, FullTag],
-    task_images: Dict[int, Frame],
-    id2label: dict,
-    id2attrib: dict,
-    *,
-    error_monitor: ErrorMonitor,
-    process_points: bool = False,
-    process_polylines: bool = False,
-    process_polygons: bool = False,
-    process_bboxes: bool = False,
-) -> dict:
-    """Process a single record with annotation from CVAT.
+class AnnotationTransform:
+    SUPPORTED_SHAPES = ("points", "polyline", "polygon", "rectangle")
 
-    Parameters
-    ----------
-    annot
-        A dictionary with annotation data from CVAT.
-    task_images
-        Dictionary of images in the current CVAT task.
-        Keys correspond to frame ids in the task and values contain dictionary with image metadata.
-    id2label
-        A dictionary that maps label ids into label names.
-    id2attrib
-        A dictionary that maps attribute ids into attribute names.
-    error_monitor
-        An instance of `ErrorMonitor` class for storing errors for later.
-    process_points
-        If true process and return shapes of type `points`.
-    process_polylines
-        If true process and return shapes of type `polyline`.
-    process_polygons
-        If true process and return shapes of type `polygon`.
-    process_bboxes
-        If true process and return shapes of type `polygon` represented as a bounding box.
+    def __init__(
+        self,
+        task_images: Dict[int, Frame],
+        id2label: dict,
+        id2attrib: dict,
+        error_monitor: ErrorMonitor,
+        *,
+        process_points: bool = False,
+        process_polylines: bool = False,
+        process_polygons: bool = False,
+        process_bboxes: bool = False,  # bounding box from polygon
+        process_rectangles: bool = False,
+    ):
+        self.task_images = task_images
+        self.id2label = id2label
+        self.id2attrib = id2attrib
 
-    Returns
-    -------
-    A dictionary with processed annotation record.
-    """
-    is_tag = isinstance(annot, FullTag)
-    if is_tag or annot.type in SUPPORTED_SHAPES:
-        # map frame index into image id
-        image_id = task_images[annot.frame].id
+        self.error_monitor = error_monitor
 
-        # map label id into label name
-        assert annot.label_id in id2label, f"Error in CVAT - unknown label id {annot.label_id}"
-        label = id2label[annot.label_id]
+        self.process_points = process_points
+        self.process_polylines = process_polylines
+        self.process_polygons = process_polygons
+        self.process_bboxes = process_bboxes
+        self.process_rectangles = process_rectangles
 
-        # map attribute ids into attribute names
+    def annot_to_image_id(self, annot: Union[FullTag, FullShape, FullTrack]) -> str:
+        """Map frame index into image id."""
+        return self.task_images[annot.frame].id
+
+    def annot_to_label(self, annot: Union[FullTag, FullShape, FullTrack]) -> str:
+        """Map label id into label name."""
+        assert annot.label_id in self.id2label, f"Error in CVAT - unknown label id {annot.label_id}"
+        return self.id2label[annot.label_id]
+
+    def annot_to_attributes(self, annot: Union[FullTag, FullShape, FullTrack]) -> dict:
+        """Map attribute ids into attribute names."""
         for attr in annot.attributes:
             assert (
-                attr["spec_id"] in id2attrib
+                attr["spec_id"] in self.id2attrib
             ), f"Error in CVAT - unknown attribute id {attr['spec_id']}"
-        attributes = {id2attrib[x["spec_id"]]: x["value"] for x in annot.attributes}
+        attributes = {self.id2attrib[x["spec_id"]]: x["value"] for x in annot.attributes}
+        return attributes
 
-        # process output
-        if is_tag:  # process tag
+    def annot_to_shape_data(self, annot: Union[FullShape, FullTrackShape]) -> dict:
+        """Retrieve shape spatial data from annotation record."""
+        out = {}
+        if annot.type == "polygon" and self.process_bboxes:
+            # store polygon record as bbox in COCO format [xmin, ymin, width, height]
+            out["bbox"] = polygon2bbox(annot.points)
+        if (
+            (annot.type == "points" and self.process_points)
+            or (annot.type == "polyline" and self.process_polylines)
+            or (annot.type == "polygon" and self.process_polygons)
+            or (annot.type == "rectangle" and self.process_rectangles)
+        ):
+            # store raw record
+            out["points"] = annot.points
+        return out
+
+    @validate_arguments
+    def process_tag(self, annot: FullTag) -> dict:
+        """Process tag annotation."""
+        out = {
+            "image_id": self.annot_to_image_id(annot),
+            "type": "tag",
+            "label": self.annot_to_label(annot),
+            "attributes": self.annot_to_attributes(annot) or None,
+        }
+        return out
+
+    @validate_arguments
+    def process_shape(self, annot: FullShape) -> dict:
+        """Process shape annotation."""
+        if annot.type in self.SUPPORTED_SHAPES:
             out = {
-                "image_id": image_id,
-                "type": "tag",
-                "label": label,
-                "attributes": attributes or None,
-            }
-        else:  # process shape
-            out = {
-                "image_id": image_id,
+                "image_id": self.annot_to_image_id(annot),
                 "type": annot.type,
-                "label": label,
-                "attributes": attributes or None,
+                "label": self.annot_to_label(annot),
+                "attributes": self.annot_to_attributes(annot) or None,
+                **self.annot_to_shape_data(annot),
             }
-            if annot.type == "polygon" and process_bboxes:
-                # store polygon record as bbox in COCO format [xmin, ymin, width, height]
-                out["bbox"] = polygon2bbox(annot.points)
+        else:
+            self.error_monitor.log_error(f"Unknown annotation type: {annot.type}")
+            out = None
 
-            if (
-                (annot.type == "points" and process_points)
-                or (annot.type == "polyline" and process_polylines)
-                or (annot.type == "polygon" and process_polygons)
-            ):
-                # store raw record
-                out["points"] = annot.points
-    else:
-        error_monitor.log_error(f"Unknown annotation type: {annot.type}")
-        out = None
+        return out
 
-    return out
+    @validate_arguments
+    def process_track(self, annot: FullTrack) -> List[dict]:
+        """Process track annotation."""
+        label = self.annot_to_label(annot)
+        track_attributes = self.annot_to_attributes(annot)
+        out = []
+        for shape_annot in annot.shapes:
+            if shape_annot.type in self.SUPPORTED_SHAPES:
+                attributes = self.annot_to_attributes(shape_annot)
+                attributes.update(track_attributes)
+                out.append(
+                    {
+                        "image_id": self.annot_to_image_id(shape_annot),
+                        "track_id": shape_annot.id,
+                        "type": shape_annot.type,
+                        "label": label,
+                        "attributes": attributes or None,
+                        **self.annot_to_shape_data(shape_annot),
+                    }
+                )
+            else:
+                self.error_monitor.log_error(f"Unknown annotation type: {shape_annot.type}")
+        return out
 
 
 def get_task_metadata(
@@ -175,6 +200,7 @@ def get_task_metadata(
     process_polylines: bool = False,
     process_polygons: bool = False,
     process_bboxes: bool = False,
+    process_rectangles: bool = False,
     process_tags: bool = False,
     all_jobs: bool = False,
 ) -> Tuple[List[dict], List[dict]]:
@@ -194,6 +220,8 @@ def get_task_metadata(
         If true process and return shapes of type `polygon`.
     process_bboxes
         If true process and return shapes of type `polygon` represented as a bounding box.
+    process_rectangles
+        If true process and return shapes of type `rectangle`.
     process_tags
         If true process and return tags.
     all_jobs
@@ -217,6 +245,17 @@ def get_task_metadata(
         task_images = {k: v for k, v in task_images.items() if v.status == "completed"}
 
     # load annotation data from individual jobs
+    annot_tfm = AnnotationTransform(
+        task_images,
+        id2label,
+        id2attrib,
+        error_monitor,
+        process_points=process_points,
+        process_polylines=process_polylines,
+        process_polygons=process_polygons,
+        process_bboxes=process_bboxes,
+        process_rectangles=process_rectangles,
+    )
     task_annotations = []
     for i, job in enumerate(jobs):
         # skip if the job is not completed yet
@@ -226,40 +265,22 @@ def get_task_metadata(
         # load annotations for a specific job
         annotations = load_annotations(job)
 
-        # process annotation records (shapes) and store potential errors
+        # process annotation records (shapes)
         for annot in annotations.shapes:
-            out = process_annotation_record(
-                annot,
-                task_images,
-                id2label,
-                id2attrib,
-                error_monitor=error_monitor,
-                process_points=process_points,
-                process_polylines=process_polylines,
-                process_polygons=process_polygons,
-                process_bboxes=process_bboxes,
-            )
-            if out is not None:
-                task_annotations.append(out)
+            _shape = annot_tfm.process_shape(annot)
+            if _shape is not None:
+                task_annotations.append(_shape)
 
-        # process annotation records (tags) and store potential errors
+        # process annotation records (tracks)
+        for annot in annotations.tracks:
+            task_annotations.extend(annot_tfm.process_track(annot))
+
+        # process annotation records (tags)
         if process_tags:
-            for annot in annotations.tags:
-                out = process_annotation_record(
-                    annot,
-                    task_images,
-                    id2label,
-                    id2attrib,
-                    error_monitor=error_monitor,
-                )
-                if out is not None:
-                    task_annotations.append(out)
+            task_annotations.extend([annot_tfm.process_tag(annot) for annot in annotations.tags])
 
-    # convert task images to list
-    task_images = list(task_images.values())
-
-    # convert to dict
-    task_images = [x.dict() for x in task_images]
+    # convert task images to list of dicts (instead of dict of objects)
+    task_images = [x.dict() for x in task_images.values()]
 
     return task_images, task_annotations
 
@@ -273,6 +294,7 @@ def download_data(
     polylines: bool = False,
     polygons: bool = False,
     bboxes: bool = False,
+    rectangles: bool = False,
     tags: bool = False,
     all_jobs: bool = False,
 ):
@@ -294,6 +316,8 @@ def download_data(
         If true process and return shapes of type `polygon`.
     bboxes
         If true process and return shapes of type `polygon` represented as a bounding box.
+    rectangles
+        If true process and return shapes of type `rectangle`.
     tags
         If true process and return tags.
     all_jobs
@@ -322,6 +346,8 @@ def download_data(
         images_path = os.path.join(output_path, "images")
         images_tmp_path = os.path.join(output_path, "images_tmp")
         os.makedirs(images_path, exist_ok=True)
+        if os.path.isdir(images_tmp_path):
+            shutil.rmtree(images_tmp_path)
         os.makedirs(images_tmp_path, exist_ok=False)
 
     # check filter arguments (at least one of them should be True)
@@ -345,6 +371,7 @@ def download_data(
             process_polylines=polylines,
             process_polygons=polygons,
             process_bboxes=bboxes,
+            process_rectangles=rectangles,
             process_tags=tags,
             all_jobs=all_jobs,
         )
@@ -421,6 +448,7 @@ if __name__ == "__main__":
         polylines=args.polylines,
         polygons=args.polygons,
         bboxes=args.bboxes,
+        rectangles=args.rectangles,
         tags=args.tags,
         all_jobs=args.all_jobs,
     )
