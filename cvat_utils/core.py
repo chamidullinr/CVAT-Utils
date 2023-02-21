@@ -154,7 +154,7 @@ def download_images(task_id: int, output_path: str) -> List[str]:
     -------
     A list of downloaded images.
     """
-    url = f"https://cvat.piva-ai.com/api/v1/tasks/{task_id}/dataset"
+    url = f"{API_URL}/tasks/{task_id}/dataset"
 
     # create request and wait till 201 (created) status code
     while True:
