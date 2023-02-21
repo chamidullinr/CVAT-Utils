@@ -2,6 +2,8 @@ from typing import Any, List, Optional
 
 from pydantic import BaseModel, root_validator
 
+from cvat_utils.config import API_URL
+
 """
 Custom CVAT models.
 """
@@ -24,12 +26,14 @@ class Job(BaseModel):
     def set_variables(cls, values: dict) -> dict:
         """Preprocess class variables."""
         if "url" in values:
-            values["url"] = values["url"].replace("http://", "https://")
+            # replace IP addr with base url
+            path = values["url"].split("/api/")[1]
+            values["url"] = f"{API_URL}/{path}"
         return values
 
 
 class Frame(BaseModel):
-    id: int
+    id: str
     file_name: str
     width: int
     height: int
@@ -49,6 +53,9 @@ class FullLabel(BaseModel):
     name: str
     color: str
     attributes: List[dict]
+    type: str
+    sublabels: list
+    has_parent: bool
 
 
 class FullJob(BaseModel):
@@ -56,7 +63,9 @@ class FullJob(BaseModel):
     url: str
     status: str
     assignee: Optional[dict]
-    reviewer: Optional[dict]
+    status: str
+    stage: str
+    state: str
 
 
 class FullSegment(BaseModel):
@@ -89,6 +98,9 @@ class FullTask(BaseModel):
     data: int
     dimension: str
     subset: str
+    organization: Any  # not tested what the CVAT API returns
+    target_storage: Any  # not tested what the CVAT API returns
+    source_storage: Any  # not tested what the CVAT API returns
 
 
 class FullFrame(BaseModel):
@@ -106,6 +118,7 @@ class FullTaskMetadata(BaseModel):
     stop_frame: int
     frame_filter: str
     frames: List[FullFrame]
+    deleted_frames: list  # not tested what the CVAT API returns
 
 
 class FullProject(BaseModel):
@@ -113,41 +126,61 @@ class FullProject(BaseModel):
     url: str
     name: str
     labels: List[FullLabel]
-    tasks: List[FullTask]
+    tasks: List[int]
     owner: Optional[dict]
     assignee: Optional[dict]
     bug_tracker: str
     created_date: str
     updated_date: str
     status: str
-    training_project: Optional[Any]
     dimension: str
+    organization: Any  # not tested what the CVAT API returns
+    target_storage: Any  # not tested what the CVAT API returns
+    source_storage: Any  # not tested what the CVAT API returns
+    task_subsets: list  # not tested what the CVAT API returns
 
 
-class FullTag(BaseModel):
+class FullAnnotationBase(BaseModel):
     id: int
     frame: int
     label_id: int
-    group: int
+    group: Optional[int]
     source: str
     attributes: List[dict]
 
 
-class FullShape(BaseModel):
+class FullTag(FullAnnotationBase):
+    pass
+
+
+class FullShape(FullAnnotationBase):
+    type: str
+    occluded: bool
+    outside: bool
+    z_order: int
+    rotation: float
+    points: list
+    elements: list  # not tested what the CVAT API returns
+
+
+class FullTrackShape(BaseModel):
     id: int
     frame: int
-    label_id: int
-    group: int
-    source: str
     attributes: List[dict]
     type: str
     occluded: bool
+    outside: bool
     z_order: int
+    rotation: float
     points: list
+
+
+class FullTrack(FullAnnotationBase):
+    shapes: List[FullTrackShape]
 
 
 class FullAnnotations(BaseModel):
     version: int
     tags: List[FullTag]
     shapes: List[FullShape]
-    tracks: list  # TODO - add FullTrack
+    tracks: List[FullTrack]
