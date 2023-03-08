@@ -59,6 +59,16 @@ def load_args(args: list = None) -> argparse.Namespace:
         action="store_true",
     )
     parser.add_argument(
+        "--rectangles",
+        help="If selected the script will include rectangle annotations in the export.",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--tags",
+        help="If selected the script will include tag annotations.",
+        action="store_true",
+    )
+    parser.add_argument(
         "--all-jobs",
         help="If selected the script will include all jobs regardless the status. "
         "By default the script includes only jobs with status=completed",
@@ -351,12 +361,12 @@ def download_data(
         os.makedirs(images_tmp_path, exist_ok=False)
 
     # check filter arguments (at least one of them should be True)
-    if not points and not polylines and not polygons and not bboxes:
+    if not points and not polylines and not polygons and not bboxes and not rectangles and not tags:
         logger.warning(
-            "Non of the filter arguments (points, polylines, polygons, bboxes) were selected. "
-            "The script will download all available shape types."
+            "None of the filter arguments (points, polylines, polygons, bboxes, rectangles, tags)"
+            "were selected. The script will download all available shape types."
         )
-        points, polylines, polygons, bboxes = True, True, True, True
+        points, polylines, polygons, bboxes, rectangles, tags = True, True, True, True, True, True
 
     # load data from CVAT
     logger.info(f"Processing tasks: {task_ids}")
