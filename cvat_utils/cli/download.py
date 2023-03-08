@@ -3,6 +3,7 @@ import logging
 import os
 import shutil
 import sys
+import warnings
 from datetime import datetime
 from typing import Dict, List, Tuple, Union
 
@@ -56,6 +57,16 @@ def load_args(args: list = None) -> argparse.Namespace:
     parser.add_argument(
         "--bboxes",
         help="If selected the script will include bbox annotations from polygon in the export.",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--rectangles",
+        help="If selected the script will include rectangle annotations in the export.",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--tags",
+        help="If selected the script will include tag annotations.",
         action="store_true",
     )
     parser.add_argument(
@@ -351,12 +362,12 @@ def download_data(
         os.makedirs(images_tmp_path, exist_ok=False)
 
     # check filter arguments (at least one of them should be True)
-    if not points and not polylines and not polygons and not bboxes:
+    if not points and not polylines and not polygons and not bboxes and not rectangles and not tags:
         logger.warning(
-            "Non of the filter arguments (points, polylines, polygons, bboxes) were selected. "
-            "The script will download all available shape types."
+            "None of the filter arguments (points, polylines, polygons, bboxes, rectangles, tags)"
+            "were selected. The script will download all available shape types."
         )
-        points, polylines, polygons, bboxes = True, True, True, True
+        points, polylines, polygons, bboxes, rectangles, tags = True, True, True, True, True, True
 
     # load data from CVAT
     logger.info(f"Processing tasks: {task_ids}")
@@ -399,10 +410,13 @@ def download_data(
                     # move to the image directory
                     trg = os.path.join(images_path, new_file_path)
                     os.makedirs(os.path.dirname(trg), exist_ok=True)
-                    os.rename(
-                        os.path.join(images_tmp_path, file_path),
-                        trg,
-                    )
+                    try:
+                        os.rename(
+                            os.path.join(images_tmp_path, file_path),
+                            trg,
+                        )
+                    except FileNotFoundError as e:
+                        warnings.warn(str(e))
 
                     # include image paths to the metadata
                     image_data["file_path"] = new_file_path
