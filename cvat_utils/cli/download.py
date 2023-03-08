@@ -416,7 +416,7 @@ def download_data(
                             trg,
                         )
                     except FileNotFoundError as e:
-                        warnings.warn(e)
+                        warnings.warn(str(e))
 
                     # include image paths to the metadata
                     image_data["file_path"] = new_file_path
