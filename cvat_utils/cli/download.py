@@ -3,6 +3,7 @@ import logging
 import os
 import shutil
 import sys
+import warnings
 from datetime import datetime
 from typing import Dict, List, Tuple, Union
 
@@ -409,10 +410,13 @@ def download_data(
                     # move to the image directory
                     trg = os.path.join(images_path, new_file_path)
                     os.makedirs(os.path.dirname(trg), exist_ok=True)
-                    os.rename(
-                        os.path.join(images_tmp_path, file_path),
-                        trg,
-                    )
+                    try:
+                        os.rename(
+                            os.path.join(images_tmp_path, file_path),
+                            trg,
+                        )
+                    except FileNotFoundError as e:
+                        warnings.warn(e)
 
                     # include image paths to the metadata
                     image_data["file_path"] = new_file_path
