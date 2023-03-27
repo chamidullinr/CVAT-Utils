@@ -391,7 +391,7 @@ def download_data(
         sys.exit(0)
     project, _ = load_project_data(project_ids[0])
     categories = [x.dict() for x in project.labels]
-    categories = sorted(categories, key=lambda x: x["id"])
+    categories = sorted(categories, key=lambda x: x["name"])
 
     # load task data from CVAT
     logger.info(f"Processing tasks: {task_ids}")
