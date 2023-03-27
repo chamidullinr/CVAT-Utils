@@ -169,6 +169,8 @@ class AnnotationTransform:
                 "image_id": self.annot_to_image_id(annot),
                 "type": annot.type,
                 "label": self.annot_to_label(annot),
+                "occluded": annot.occluded,
+                "outside": annot.outside,
                 "attributes": self.annot_to_attributes(annot) or None,
                 **self.annot_to_shape_data(annot),
             }
@@ -194,6 +196,8 @@ class AnnotationTransform:
                         "track_id": shape_annot.id,
                         "type": shape_annot.type,
                         "label": label,
+                        "occluded": shape_annot.occluded,
+                        "outside": shape_annot.outside,
                         "attributes": attributes or None,
                         **self.annot_to_shape_data(shape_annot),
                     }
