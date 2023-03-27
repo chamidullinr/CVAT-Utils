@@ -11,7 +11,13 @@ import numpy as np
 from pydantic import validate_arguments
 from tqdm.auto import tqdm
 
-from cvat_utils import download_images, load_annotations, load_credentials, load_task_data
+from cvat_utils import (
+    download_images,
+    load_annotations,
+    load_credentials,
+    load_project_data,
+    load_task_data,
+)
 from cvat_utils.models import Frame, FullShape, FullTag, FullTrack, FullTrackShape
 from cvat_utils.utils import ErrorMonitor, to_json
 
@@ -169,6 +175,8 @@ class AnnotationTransform:
                 "image_id": self.annot_to_image_id(annot),
                 "type": annot.type,
                 "label": self.annot_to_label(annot),
+                "occluded": annot.occluded,
+                "outside": annot.outside,
                 "attributes": self.annot_to_attributes(annot) or None,
                 **self.annot_to_shape_data(annot),
             }
@@ -194,6 +202,8 @@ class AnnotationTransform:
                         "track_id": shape_annot.id,
                         "type": shape_annot.type,
                         "label": label,
+                        "occluded": shape_annot.occluded,
+                        "outside": shape_annot.outside,
                         "attributes": attributes or None,
                         **self.annot_to_shape_data(shape_annot),
                     }
@@ -298,7 +308,7 @@ def get_task_metadata(
 
 def download_data(
     *,
-    task_ids: List[int],
+    task_ids: Union[int, List[int]],
     output_path: str,
     load_images: bool = False,
     points: bool = False,
@@ -369,7 +379,21 @@ def download_data(
         )
         points, polylines, polygons, bboxes, rectangles, tags = True, True, True, True, True, True
 
-    # load data from CVAT
+    # load project data from CVAT
+    project_ids = set()
+    for task_id in task_ids:
+        task, _, _ = load_task_data(task_id)
+        project_ids.add(task.project_id)
+    project_ids = list(project_ids)
+    # check if tasks belong to multiple projects
+    if len(project_ids) > 1:
+        logger.error(f"Tasks belong to multiple projects: {project_ids}.")
+        sys.exit(0)
+    project, _ = load_project_data(project_ids[0])
+    categories = [x.dict() for x in project.labels]
+    categories = sorted(categories, key=lambda x: x["name"])
+
+    # load task data from CVAT
     logger.info(f"Processing tasks: {task_ids}")
     images, annotations = [], []
     error_monitor = ErrorMonitor()
@@ -443,6 +467,7 @@ def download_data(
         },
         "images": images,
         "annotations": annotations,
+        "categories": categories,
     }
     to_json(metadata, metadata_file)
 
