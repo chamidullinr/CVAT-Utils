@@ -90,6 +90,7 @@ def load_task_data(
     frames = {
         frame_id: Frame(  # frame id should be unique in the current task only
             id=x.name.split(".")[0],  # id should be unique across the whole dataset
+            frame_id=frame_id,
             file_name=x.name.split("/")[-1],
             width=x.width,
             height=x.height,
