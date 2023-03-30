@@ -199,7 +199,7 @@ class AnnotationTransform:
                 out.append(
                     {
                         "image_id": self.annot_to_image_id(shape_annot),
-                        "track_id": shape_annot.id,
+                        "track_id": annot.id,
                         "type": shape_annot.type,
                         "label": label,
                         "occluded": shape_annot.occluded,

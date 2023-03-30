@@ -34,6 +34,7 @@ class Job(BaseModel):
 
 class Frame(BaseModel):
     id: str
+    frame_id: int
     file_name: str
     width: int
     height: int
