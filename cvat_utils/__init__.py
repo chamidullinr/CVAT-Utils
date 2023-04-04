@@ -1,7 +1,5 @@
 import logging
 
-from cvat_utils.log import setup_logging
-
 from . import api_requests, core, utils
 from .api_requests import load_credentials
 from .core import (
@@ -11,6 +9,7 @@ from .core import (
     load_project_data,
     load_task_data,
 )
+from .utils.log import setup_logging
 from .version import __version__
 
 __all__ = [

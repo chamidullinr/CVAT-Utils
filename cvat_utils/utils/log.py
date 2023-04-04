@@ -5,7 +5,7 @@ import os
 import yaml
 
 _module_dir = os.path.abspath(os.path.dirname(__file__))
-LOGGER_CONFIG = os.path.join(_module_dir, "config/logging.yaml")
+LOGGER_CONFIG = os.path.join(_module_dir, "../config/logging.yaml")
 
 
 def setup_logging():
