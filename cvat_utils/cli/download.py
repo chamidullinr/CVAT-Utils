@@ -13,6 +13,7 @@ from tqdm.auto import tqdm
 
 from cvat_utils import (
     download_images,
+    image_path_to_image_id,
     load_annotations,
     load_credentials,
     load_project_data,
@@ -419,7 +420,7 @@ def download_data(
             # align downloaded images with metadata
             # remove task-{id}/images prefix to get a file id
             imageid2filepath = {
-                x.split(".")[0].replace(f"task-{task_id}/images/", ""): x for x in files
+                image_path_to_image_id(x).replace(f"task-{task_id}/images/", ""): x for x in files
             }
             for image_data in task_images:
                 image_id = image_data["id"]
@@ -445,11 +446,12 @@ def download_data(
                     # include image paths to the metadata
                     image_data["file_path"] = new_file_path
 
-            # remove temporary directory with unused images
-            shutil.rmtree(images_tmp_path)
-
         images.extend(task_images)
         annotations.extend(task_annotations)
+
+    if load_images:
+        # remove temporary directory with unused images
+        shutil.rmtree(images_tmp_path)
 
     # print errors
     error_monitor.print_errors()

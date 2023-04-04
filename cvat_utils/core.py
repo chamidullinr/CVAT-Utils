@@ -7,7 +7,7 @@ import zipfile
 from typing import Dict, List, Tuple, Union
 
 from cvat_utils import api_requests
-from cvat_utils.config import API_URL
+from cvat_utils.config import API_URL, DOWNLOAD_THRESHOLD_GB
 from cvat_utils.models import (
     Frame,
     FullAnnotations,
@@ -67,6 +67,11 @@ def load_project_data(
     return project, tasks
 
 
+def image_path_to_image_id(image_path: str) -> str:
+    """Create image ID from image path in stored CVAT."""
+    return ".".join(image_path.split(".")[:-1])
+
+
 def load_task_data(
     task_id: int, *, return_dict: bool = False
 ) -> Tuple[Union[FullTask, dict], List[Union[Job, dict]], Dict[int, Union[Frame, dict]]]:
@@ -89,7 +94,7 @@ def load_task_data(
     frame_ids_range = range(meta.start_frame, meta.stop_frame + 1)
     frames = {
         frame_id: Frame(  # frame id should be unique in the current task only
-            id=x.name.split(".")[0],  # id should be unique across the whole dataset
+            id=image_path_to_image_id(x.name),  # id should be unique across the whole dataset
             frame_id=frame_id,
             file_name=x.name.split("/")[-1],
             width=x.width,
@@ -167,6 +172,8 @@ def download_images(task_id: int, output_path: str) -> List[str]:
         time.sleep(5)
 
     # load images
+    # send GET request as a stream and check content lenght in headers first
+    # then decide if to download directly to memory or by chunks to a file
     resp = api_requests.get(
         url,
         params={
@@ -174,16 +181,29 @@ def download_images(task_id: int, output_path: str) -> List[str]:
             "action": "download",
         },
         load_content=False,
+        stream=True,
     )
+    content_legth_gb = float(resp.headers["Content-Length"]) * 1e-9
+    keep_in_memory = content_legth_gb <= DOWNLOAD_THRESHOLD_GB
+    if keep_in_memory:
+        # download data directly to memory
+        buffer_or_file = io.BytesIO(resp.content)
+    else:
+        # download data by chunks to a file
+        resp.raise_for_status()
+        buffer_or_file = os.path.join(output_path, f"task-{task_id}.zip")
+        os.makedirs(output_path, exist_ok=True)
+        with open(buffer_or_file, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=8192):
+                f.write(chunk)
 
     # extract zip file
-    output_path = os.path.join(output_path, f"task-{task_id}")
-    os.makedirs(output_path, exist_ok=False)
-    buffer = io.BytesIO(resp.content)
-    with zipfile.ZipFile(buffer) as zip_ref:
+    output_task_path = os.path.join(output_path, f"task-{task_id}")
+    os.makedirs(output_task_path, exist_ok=False)
+    with zipfile.ZipFile(buffer_or_file) as zip_ref:
         files = [x for x in zip_ref.namelist() if is_image(x)]
-        zip_ref.extractall(output_path, members=files)
+        zip_ref.extractall(output_task_path, members=files)
     files = [os.path.join(f"task-{task_id}", x) for x in files]
-    # logger.info(f"Downloaded and extracted {len(files)} files to '{output_path}'.")
+    logger.debug(f"Downloaded and extracted {len(files)} files to '{output_task_path}'.")
 
     return files
