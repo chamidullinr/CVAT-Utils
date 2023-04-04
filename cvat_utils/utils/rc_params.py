@@ -30,6 +30,3 @@ class RcParams(dict):
         logger.info(f"Update configuration: {key}={value}.")
         setattr(config, key, value)
         super().__setitem__(key, value)
-
-
-rc_params = RcParams()

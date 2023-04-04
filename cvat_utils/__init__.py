@@ -10,7 +10,7 @@ from .core import (
     load_task_data,
 )
 from .utils.log import setup_logging
-from .utils.rc_params import rc_params
+from .utils.rc_params import RcParams
 from .version import __version__
 
 __all__ = [
@@ -29,3 +29,4 @@ __all__ = [
 
 setup_logging()
 logger = logging.getLogger("cvat_utils")
+rc_params = RcParams()  # create rc_params after creating logger
