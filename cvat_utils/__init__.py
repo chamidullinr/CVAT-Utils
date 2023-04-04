@@ -10,6 +10,7 @@ from .core import (
     load_task_data,
 )
 from .utils.log import setup_logging
+from .utils.rc_params import rc_params
 from .version import __version__
 
 __all__ = [
@@ -22,6 +23,7 @@ __all__ = [
     "load_task_data",
     "load_annotations",
     "image_path_to_image_id",
+    "rc_params",
     "__version__",
 ]
 
