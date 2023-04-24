@@ -27,6 +27,10 @@ class RcParams(dict):
             raise KeyError(
                 f"Unknown key: '{key}'. Use one of the config keys: {self.config_variables}."
             )
-        logger.info(f"Update configuration: {key}={value}.")
         setattr(config, key, value)
         super().__setitem__(key, value)
+        if key == "LOGGING_LEVEL":
+            logger.setLevel(value)
+            for h in logger.handlers:
+                h.setLevel(value)
+        logger.info(f"Update configuration: {key}={value}.")

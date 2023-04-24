@@ -4,7 +4,7 @@ import os
 
 import yaml
 
-from ..config import LOGGING_LEVEL
+from .. import config
 
 _module_dir = os.path.abspath(os.path.dirname(__file__))
 LOGGER_CONFIG = os.path.join(_module_dir, "../config/logging.yaml")
@@ -12,11 +12,12 @@ LOGGER_CONFIG = os.path.join(_module_dir, "../config/logging.yaml")
 
 def setup_logging():
     """Setup logging configuration from a file."""
-    with open(LOGGER_CONFIG, "r") as f:
-        config = yaml.safe_load(f.read())
-        logging.config.dictConfig(config)
+    if not logging.getLogger("cvat_utils").hasHandlers():
+        with open(LOGGER_CONFIG, "r") as f:
+            logger_config = yaml.safe_load(f.read())
+            logging.config.dictConfig(logger_config)
 
-    logger = logging.getLogger("cvat_utils")
-    logger.setLevel(LOGGING_LEVEL)
-    for h in logger.handlers:
-        h.setLevel(LOGGING_LEVEL)
+        logger = logging.getLogger("cvat_utils")
+        logger.setLevel(config.LOGGING_LEVEL)
+        for h in logger.handlers:
+            h.setLevel(config.LOGGING_LEVEL)
