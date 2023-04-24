@@ -6,8 +6,7 @@ import warnings
 import zipfile
 from typing import Dict, List, Tuple, Union
 
-from cvat_utils import api_requests
-from cvat_utils.config import API_URL, DOWNLOAD_THRESHOLD_GB
+from cvat_utils import api_requests, config
 from cvat_utils.models import (
     Frame,
     FullAnnotations,
@@ -23,7 +22,7 @@ logger = logging.getLogger("cvat_utils")
 
 
 def _load_project(project_id: int) -> FullProject:
-    project_url = os.path.join(API_URL, f"projects/{project_id}")
+    project_url = os.path.join(config.API_URL, f"projects/{project_id}")
     project_dict = api_requests.get(project_url)
     project = FullProject(**project_dict)
     if project.dict() != project_dict:
@@ -34,7 +33,7 @@ def _load_project(project_id: int) -> FullProject:
 
 
 def _load_task(task_id: int) -> FullTask:
-    task_url = os.path.join(API_URL, f"tasks/{task_id}")
+    task_url = os.path.join(config.API_URL, f"tasks/{task_id}")
     task_dict = api_requests.get(task_url)
     task = FullTask(**task_dict)
     if task.dict() != task_dict:
@@ -43,7 +42,7 @@ def _load_task(task_id: int) -> FullTask:
 
 
 def _load_task_metadata(task_id: int) -> FullTaskMetadata:
-    task_meta_url = f"{API_URL}/tasks/{task_id}/data/meta"
+    task_meta_url = f"{config.API_URL}/tasks/{task_id}/data/meta"
     meta_dict = api_requests.get(task_meta_url)
     meta = FullTaskMetadata(**meta_dict)
     if meta.dict() != meta_dict:
@@ -160,7 +159,7 @@ def download_images(task_id: int, output_path: str) -> List[str]:
     -------
     A list of downloaded images.
     """
-    url = f"{API_URL}/tasks/{task_id}/dataset"
+    url = f"{config.API_URL}/tasks/{task_id}/dataset"
 
     # create request and wait till 201 (created) status code
     while True:
@@ -184,7 +183,7 @@ def download_images(task_id: int, output_path: str) -> List[str]:
         stream=True,
     )
     content_legth_gb = float(resp.headers["Content-Length"]) * 1e-9
-    keep_in_memory = content_legth_gb <= DOWNLOAD_THRESHOLD_GB
+    keep_in_memory = content_legth_gb <= config.DOWNLOAD_THRESHOLD_GB
     if keep_in_memory:
         # download data directly to memory
         buffer_or_file = io.BytesIO(resp.content)

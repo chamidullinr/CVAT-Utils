@@ -3,7 +3,7 @@ from typing import Any, List, Optional
 
 from pydantic import BaseModel, root_validator
 
-from cvat_utils.config import API_URL
+from cvat_utils import config
 
 """
 Custom CVAT models.
@@ -28,7 +28,7 @@ class Job(BaseModel):
         """Preprocess class variables."""
         if "url" in values:
             # replace IP addr with base url
-            values["url"] = os.path.join(API_URL, values["url"].split("/api/")[1])
+            values["url"] = os.path.join(config.API_URL, values["url"].split("/api/")[1])
         return values
 
 
