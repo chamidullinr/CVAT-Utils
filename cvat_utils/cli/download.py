@@ -320,6 +320,7 @@ def download_data(
     tags: bool = False,
     all_jobs: bool = False,
     task_directory: bool = True,
+    label_ids: bool = False,
 ):
     """Download image metadata and annotations from CVAT and optionally images.
 
@@ -349,6 +350,8 @@ def download_data(
     task_directory
         If True download images into a sup-directory named using task ID.
         Otherwise, download images from different tasks into the same directory structure.
+    label_ids
+        Relabel original CVAT image IDs into integer values.
     """
     if not isinstance(task_ids, (list, tuple)):
         task_ids = [task_ids]
@@ -401,6 +404,7 @@ def download_data(
     # load task data from CVAT
     logger.info(f"Processing tasks: {task_ids}")
     images, annotations = [], []
+    image_id_map = {}
     error_monitor = ErrorMonitor()
     for task_id in tqdm(task_ids):
         # load task metadata including list of images and annotations
@@ -416,6 +420,17 @@ def download_data(
             all_jobs=all_jobs,
         )
 
+        # re-label image ids
+        if label_ids:
+            for image_data in task_images:
+                if image_data["id"] not in image_id_map:
+                    image_id_map[image_data["id"]] = len(image_id_map)
+                image_data["original_id"] = image_data["id"]
+                image_data["id"] = image_id_map[image_data["id"]]
+            for annot_data in task_annotations:
+                assert annot_data["image_id"] in image_id_map
+                annot_data["image_id"] = image_id_map[annot_data["image_id"]]
+
         # download images
         if load_images:
             # download images to the temporary directory
@@ -425,17 +440,18 @@ def download_data(
             # remove task-{id}/images/ prefix to get a file id
             imageid2filepath = {image_path_to_image_id(x).split("images/")[1]: x for x in files}
             for image_data in task_images:
-                image_id = image_data["id"]
+                image_id = image_data["original_id" if "original_id" in image_data else "id"]
                 if image_id not in imageid2filepath:
                     error_monitor.log_error(f"Some images in task {task_id} were not downloaded.")
                     image_data["file_path"] = None
                 else:
                     file_path = imageid2filepath[image_id]
                     image_ext = image_data["file_name"].split(".")[-1]
+                    new_image_id = image_data["id"]
                     if task_directory:
-                        new_file_path = f"task-{task_id}/{image_id}.{image_ext}"
+                        new_file_path = f"task-{task_id}/{new_image_id}.{image_ext}"
                     else:
-                        new_file_path = f"{image_id}.{image_ext}"
+                        new_file_path = f"{new_image_id}.{image_ext}"
 
                     # move to the image directory
                     trg = os.path.join(images_path, new_file_path)
