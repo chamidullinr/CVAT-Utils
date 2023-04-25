@@ -202,9 +202,10 @@ def download_images(task_id: int, output_path: str, keep_image_path: bool = True
     # extract zip file
     if keep_image_path:
         output_task_path = output_path
+        os.makedirs(output_task_path, exist_ok=True)
     else:
         output_task_path = os.path.join(output_path, f"task-{task_id}")
-    os.makedirs(output_task_path, exist_ok=False)
+        os.makedirs(output_task_path, exist_ok=False)
     with zipfile.ZipFile(buffer_or_file) as zip_ref:
         files = [x for x in zip_ref.namelist() if is_image(x)]
         zip_ref.extractall(output_task_path, members=files)
