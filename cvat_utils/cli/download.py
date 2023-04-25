@@ -319,7 +319,7 @@ def download_data(
     rectangles: bool = False,
     tags: bool = False,
     all_jobs: bool = False,
-    task_directory: bool = True,
+    keep_image_path: bool = False,
     label_ids: bool = False,
 ):
     """Download image metadata and annotations from CVAT and optionally images.
@@ -347,8 +347,8 @@ def download_data(
     all_jobs
         If true include all jobs regardless the status.
         By default, include only jobs with status=completed.
-    task_directory
-        If True download images into a sup-directory named using task ID.
+    keep_image_path
+        If False download images into a sup-directories named based on task IDs.
         Otherwise, download images from different tasks into the same directory structure.
     label_ids
         Relabel original CVAT image IDs into integer values.
@@ -434,7 +434,7 @@ def download_data(
         # download images
         if load_images:
             # download images to the temporary directory
-            files = download_images(task_id, images_tmp_path, task_directory=task_directory)
+            files = download_images(task_id, images_tmp_path, keep_image_path=keep_image_path)
 
             # align downloaded images with metadata
             # remove task-{id}/images/ prefix to get a file id
@@ -448,10 +448,10 @@ def download_data(
                     file_path = imageid2filepath[image_id]
                     image_ext = image_data["file_name"].split(".")[-1]
                     new_image_id = image_data["id"]
-                    if task_directory:
-                        new_file_path = f"task-{task_id}/{new_image_id}.{image_ext}"
-                    else:
+                    if keep_image_path:
                         new_file_path = f"{new_image_id}.{image_ext}"
+                    else:
+                        new_file_path = f"task-{task_id}/{new_image_id}.{image_ext}"
 
                     # move to the image directory
                     trg = os.path.join(images_path, new_file_path)
