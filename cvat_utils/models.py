@@ -1,4 +1,3 @@
-import os
 from typing import Any, List, Optional
 
 from pydantic import BaseModel, root_validator
@@ -28,7 +27,8 @@ class Job(BaseModel):
         """Preprocess class variables."""
         if "url" in values:
             # replace IP addr with base url
-            values["url"] = os.path.join(config.API_URL, values["url"].split("/api/")[1])
+            original_url = values["url"].split("/api/")[1]
+            values["url"] = f"{config.API_URL}/{original_url}"
         return values
 
 

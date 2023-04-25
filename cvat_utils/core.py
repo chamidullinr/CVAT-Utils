@@ -22,7 +22,7 @@ logger = logging.getLogger("cvat_utils")
 
 
 def _load_project(project_id: int) -> FullProject:
-    project_url = os.path.join(config.API_URL, f"projects/{project_id}")
+    project_url = f"{config.API_URL}/projects/{project_id}"
     project_dict = api_requests.get(project_url)
     project = FullProject(**project_dict)
     if project.dict() != project_dict:
@@ -33,7 +33,7 @@ def _load_project(project_id: int) -> FullProject:
 
 
 def _load_task(task_id: int) -> FullTask:
-    task_url = os.path.join(config.API_URL, f"tasks/{task_id}")
+    task_url = f"{config.API_URL}/tasks/{task_id}"
     task_dict = api_requests.get(task_url)
     task = FullTask(**task_dict)
     if task.dict() != task_dict:
@@ -134,7 +134,9 @@ def load_annotations(
     else:
         assert "url" in job
         job_url = job["url"]
-    annotations_dict = api_requests.get(os.path.join(job_url, "annotations"))
+    if job_url[-1] == "/":
+        job_url = job_url[:-1]
+    annotations_dict = api_requests.get(f"{job_url}/annotations")
     annotations = FullAnnotations(**annotations_dict)
     if annotations.dict() != annotations_dict:
         warnings.warn(
