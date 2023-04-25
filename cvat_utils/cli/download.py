@@ -457,10 +457,7 @@ def download_data(
                     trg = os.path.join(images_path, new_file_path)
                     os.makedirs(os.path.dirname(trg), exist_ok=True)
                     try:
-                        os.rename(
-                            os.path.join(images_tmp_path, file_path),
-                            trg,
-                        )
+                        os.rename(os.path.join(images_tmp_path, file_path), trg)
                     except FileNotFoundError as e:
                         warnings.warn(str(e))
 
