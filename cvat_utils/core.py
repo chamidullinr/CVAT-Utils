@@ -145,7 +145,7 @@ def load_annotations(
     return annotations
 
 
-def download_images(task_id: int, output_path: str) -> List[str]:
+def download_images(task_id: int, output_path: str, task_directory: bool = True) -> List[str]:
     """Download images from CVAT and save them to a local directory.
 
     Parameters
@@ -154,6 +154,9 @@ def download_images(task_id: int, output_path: str) -> List[str]:
         CVAT Task ID to load images from.
     output_path
         A local directory where images will be saved.
+    task_directory
+        If True download images into a sup-directory named using task ID.
+        Otherwise, download images from different tasks into the same directory structure.
 
     Returns
     -------
@@ -197,12 +200,16 @@ def download_images(task_id: int, output_path: str) -> List[str]:
                 f.write(chunk)
 
     # extract zip file
-    output_task_path = os.path.join(output_path, f"task-{task_id}")
+    if task_directory:
+        output_task_path = os.path.join(output_path, f"task-{task_id}")
+    else:
+        output_task_path = output_path
     os.makedirs(output_task_path, exist_ok=False)
     with zipfile.ZipFile(buffer_or_file) as zip_ref:
         files = [x for x in zip_ref.namelist() if is_image(x)]
         zip_ref.extractall(output_task_path, members=files)
-    files = [os.path.join(f"task-{task_id}", x) for x in files]
+    if task_directory:
+        files = [os.path.join(f"task-{task_id}", x) for x in files]
     logger.debug(f"Downloaded and extracted {len(files)} files to '{output_task_path}'.")
 
     return files

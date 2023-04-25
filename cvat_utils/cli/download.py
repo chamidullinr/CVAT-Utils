@@ -319,6 +319,7 @@ def download_data(
     rectangles: bool = False,
     tags: bool = False,
     all_jobs: bool = False,
+    task_directory: bool = True,
 ):
     """Download image metadata and annotations from CVAT and optionally images.
 
@@ -345,6 +346,9 @@ def download_data(
     all_jobs
         If true include all jobs regardless the status.
         By default, include only jobs with status=completed.
+    task_directory
+        If True download images into a sup-directory named using task ID.
+        Otherwise, download images from different tasks into the same directory structure.
     """
     if not isinstance(task_ids, (list, tuple)):
         task_ids = [task_ids]
@@ -415,13 +419,11 @@ def download_data(
         # download images
         if load_images:
             # download images to the temporary directory
-            files = download_images(task_id, images_tmp_path)
+            files = download_images(task_id, images_tmp_path, task_directory=task_directory)
 
             # align downloaded images with metadata
-            # remove task-{id}/images prefix to get a file id
-            imageid2filepath = {
-                image_path_to_image_id(x).replace(f"task-{task_id}/images/", ""): x for x in files
-            }
+            # remove task-{id}/images/ prefix to get a file id
+            imageid2filepath = {image_path_to_image_id(x).split("images/")[1]: x for x in files}
             for image_data in task_images:
                 image_id = image_data["id"]
                 if image_id not in imageid2filepath:
@@ -430,7 +432,10 @@ def download_data(
                 else:
                     file_path = imageid2filepath[image_id]
                     image_ext = image_data["file_name"].split(".")[-1]
-                    new_file_path = f"task-{task_id}/{image_id}.{image_ext}"
+                    if task_directory:
+                        new_file_path = f"task-{task_id}/{image_id}.{image_ext}"
+                    else:
+                        new_file_path = f"{image_id}.{image_ext}"
 
                     # move to the image directory
                     trg = os.path.join(images_path, new_file_path)
