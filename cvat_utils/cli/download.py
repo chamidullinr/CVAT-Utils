@@ -315,9 +315,11 @@ def get_task_metadata(
             continue
 
         # load annotations for a specific job
+        logger.debug(f"Loading annotations for job with id {job.id}.")
         annotations = load_annotations(job)
 
         # process annotation records (shapes)
+        logger.debug("Processing annotations (shapes, tracks, and tags).")
         for annot in annotations.shapes:
             _shape = annot_tfm.process_shape(annot)
             if _shape is not None:
@@ -447,12 +449,14 @@ def download_data(
     error_monitor = ErrorMonitor()
     for task_id in tqdm(task_ids):
         # load task metadata including list of images and annotations
+        logger.debug("Loading task metadata and annotations.")
         task_images, task_annotations = get_task_metadata(
             task_id,
             error_monitor=error_monitor,
             process_points=points,
             process_polylines=polylines,
             process_polygons=polygons,
+            process_masks=masks,
             process_bboxes=bboxes,
             process_rectangles=rectangles,
             process_tags=tags,
@@ -461,6 +465,7 @@ def download_data(
 
         # re-label image ids
         if label_ids:
+            logger.debug("Re-labeling image ids.")
             for image_data in task_images:
                 if image_data["id"] not in image_id_map:
                     image_id_map[image_data["id"]] = len(image_id_map)
@@ -472,6 +477,8 @@ def download_data(
 
         # download images
         if load_images:
+            logger.debug("Downloading images.")
+
             # download images to the temporary directory
             files = download_images(task_id, images_tmp_path, keep_image_path=keep_image_path)
 
