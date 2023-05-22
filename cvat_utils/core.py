@@ -24,6 +24,14 @@ logger = logging.getLogger("cvat_utils")
 def _load_project(project_id: int) -> FullProject:
     project_url = f"{config.API_URL}/projects/{project_id}"
     project_dict = api_requests.get(project_url)
+
+    # ignore fields like svg to prevent warning
+    # svg field occurs only in some labels (masks)
+    if "labels" in project_dict:
+        for x in project_dict["labels"]:
+            if "svg" in x:
+                del x["svg"]
+
     project = FullProject(**project_dict)
     if project.dict() != project_dict:
         warnings.warn(
@@ -35,6 +43,14 @@ def _load_project(project_id: int) -> FullProject:
 def _load_task(task_id: int) -> FullTask:
     task_url = f"{config.API_URL}/tasks/{task_id}"
     task_dict = api_requests.get(task_url)
+
+    # ignore fields like svg to prevent warning
+    # svg field occurs only in some labels (masks)
+    if "labels" in task_dict:
+        for x in task_dict["labels"]:
+            if "svg" in x:
+                del x["svg"]
+
     task = FullTask(**task_dict)
     if task.dict() != task_dict:
         warnings.warn("Task model in the library doesn't equal to the model returned by CVAT API.")

@@ -21,6 +21,7 @@ from cvat_utils import (
 )
 from cvat_utils.models import Frame, FullShape, FullTag, FullTrack, FullTrackShape
 from cvat_utils.utils import ErrorMonitor, to_json
+from cvat_utils.utils.formats import mask_to_points, rle_to_mask
 
 logger = logging.getLogger("script")
 
@@ -62,8 +63,13 @@ def load_args(args: list = None) -> argparse.Namespace:
         action="store_true",
     )
     parser.add_argument(
+        "--masks",
+        help="If selected the script will include mask annotations in the export.",
+        action="store_true",
+    )
+    parser.add_argument(
         "--bboxes",
-        help="If selected the script will include bbox annotations from polygon in the export.",
+        help="If selected the script will include bbox field from polygon or mask annotations.",
         action="store_true",
     )
     parser.add_argument(
@@ -96,7 +102,7 @@ def polygon2bbox(points: list) -> list:
 
 
 class AnnotationTransform:
-    SUPPORTED_SHAPES = ("points", "polyline", "polygon", "rectangle")
+    SUPPORTED_SHAPES = ("points", "polyline", "polygon", "rectangle", "mask")
 
     def __init__(
         self,
@@ -108,7 +114,8 @@ class AnnotationTransform:
         process_points: bool = False,
         process_polylines: bool = False,
         process_polygons: bool = False,
-        process_bboxes: bool = False,  # bounding box from polygon
+        process_masks: bool = False,
+        process_bboxes: bool = False,  # bounding box from polygon or mask
         process_rectangles: bool = False,
     ):
         self.task_images = task_images
@@ -120,6 +127,7 @@ class AnnotationTransform:
         self.process_points = process_points
         self.process_polylines = process_polylines
         self.process_polygons = process_polygons
+        self.process_masks = process_masks
         self.process_bboxes = process_bboxes
         self.process_rectangles = process_rectangles
 
@@ -141,12 +149,27 @@ class AnnotationTransform:
         attributes = {self.id2attrib[x["spec_id"]]: x["value"] for x in annot.attributes}
         return attributes
 
+    def _decode_rle(self, annot: Union[FullShape, FullTrackShape]) -> list:
+        rle = annot.points
+        height = self.task_images[annot.frame].height
+        width = self.task_images[annot.frame].width
+        mask = rle_to_mask(rle, height, width)
+        points = mask_to_points(mask)
+        return points
+
     def annot_to_shape_data(self, annot: Union[FullShape, FullTrackShape]) -> dict:
         """Retrieve shape spatial data from annotation record."""
         out = {}
-        if annot.type == "polygon" and self.process_bboxes:
+        # create bounding box field
+        if self.process_bboxes and annot.type == "polygon":
             # store polygon record as bbox in COCO format [xmin, ymin, width, height]
             out["bbox"] = polygon2bbox(annot.points)
+        elif self.process_bboxes and annot.type == "mask":
+            # store mask record as bbox in COCO format [xmin, ymin, width, height]
+            points = self._decode_rle(annot)
+            out["bbox"] = polygon2bbox(points)
+
+        # create points field
         if (
             (annot.type == "points" and self.process_points)
             or (annot.type == "polyline" and self.process_polylines)
@@ -155,6 +178,9 @@ class AnnotationTransform:
         ):
             # store raw record
             out["points"] = annot.points
+        elif annot.type == "mask" and self.process_masks:
+            # decode rle
+            out["points"] = self._decode_rle(annot)
         return out
 
     @validate_arguments
@@ -221,6 +247,7 @@ def get_task_metadata(
     process_points: bool = False,
     process_polylines: bool = False,
     process_polygons: bool = False,
+    process_masks: bool = False,
     process_bboxes: bool = False,
     process_rectangles: bool = False,
     process_tags: bool = False,
@@ -240,8 +267,10 @@ def get_task_metadata(
         If true process and return shapes of type `polyline`.
     process_polygons
         If true process and return shapes of type `polygon`.
+    process_masks
+        If true process and return shapes of type `mask`.
     process_bboxes
-        If true process and return shapes of type `polygon` represented as a bounding box.
+        If true process and return shapes of type `polygon` or `mask` represented as a bounding box.
     process_rectangles
         If true process and return shapes of type `rectangle`.
     process_tags
@@ -275,6 +304,7 @@ def get_task_metadata(
         process_points=process_points,
         process_polylines=process_polylines,
         process_polygons=process_polygons,
+        process_masks=process_masks,
         process_bboxes=process_bboxes,
         process_rectangles=process_rectangles,
     )
@@ -315,6 +345,7 @@ def download_data(
     points: bool = False,
     polylines: bool = False,
     polygons: bool = False,
+    masks: bool = False,
     bboxes: bool = False,
     rectangles: bool = False,
     tags: bool = False,
@@ -338,8 +369,10 @@ def download_data(
         If true process and return shapes of type `polyline`.
     polygons
         If true process and return shapes of type `polygon`.
+    masks
+        If true process and return shapes of type `mask`.
     bboxes
-        If true process and return shapes of type `polygon` represented as a bounding box.
+        If true process and return shapes of type `polygon` or `mask` represented as a bounding box.
     rectangles
         If true process and return shapes of type `rectangle`.
     tags
@@ -380,12 +413,18 @@ def download_data(
         os.makedirs(images_tmp_path, exist_ok=False)
 
     # check filter arguments (at least one of them should be True)
-    if not points and not polylines and not polygons and not bboxes and not rectangles and not tags:
+    if not (points or polylines or polygons or masks or bboxes or rectangles or tags):
         logger.warning(
             "None of the filter arguments (points, polylines, polygons, bboxes, rectangles, tags)"
             "were selected. The script will download all available shape types."
         )
-        points, polylines, polygons, bboxes, rectangles, tags = True, True, True, True, True, True
+        points = True
+        polylines = True
+        polygons = True
+        masks = True
+        bboxes = True
+        rectangles = True
+        tags = True
 
     # load project data from CVAT
     project_ids = set()
@@ -506,6 +545,7 @@ if __name__ == "__main__":
         points=args.points,
         polylines=args.polylines,
         polygons=args.polygons,
+        masks=args.masks,
         bboxes=args.bboxes,
         rectangles=args.rectangles,
         tags=args.tags,
