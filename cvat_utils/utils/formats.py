@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 
 
@@ -47,4 +48,12 @@ def mask_to_points(mask: np.ndarray) -> list:
     points
         A 1D flattened list of points.
     """
-    return np.array(np.where(mask)[::-1]).T.reshape(-1).tolist()
+    contours = cv2.findContours(
+        mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_KCOS
+    )[0]
+    contours = max(contours, key=lambda arr: arr.size)
+    if contours.shape.count(1):
+        contours = np.squeeze(contours)
+    if contours.size < 3 * 2:
+        raise Exception("Less then three point have been detected. Can not build a polygon.")
+    return contours.reshape(-1).tolist()
