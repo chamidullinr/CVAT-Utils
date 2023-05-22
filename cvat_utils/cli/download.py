@@ -85,7 +85,18 @@ def load_args(args: list = None) -> argparse.Namespace:
     parser.add_argument(
         "--all-jobs",
         help="If selected the script will include all jobs regardless the status. "
-        "By default the script includes only jobs with status=completed",
+        "By default the script includes only jobs with status=completed.",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--keep-image-path",
+        help="If False download images into a sup-directories named based on task IDs. "
+        "Otherwise, download images from different tasks into the same directory structure.",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--label-ids",
+        help="Relabel original CVAT image IDs into integer values.",
         action="store_true",
     )
     args = parser.parse_args(args)
@@ -557,4 +568,6 @@ if __name__ == "__main__":
         rectangles=args.rectangles,
         tags=args.tags,
         all_jobs=args.all_jobs,
+        keep_image_path=args.keep_image_path,
+        label_ids=args.label_ids,
     )
