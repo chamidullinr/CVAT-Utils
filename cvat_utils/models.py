@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union
 
 from pydantic import BaseModel, root_validator
 
@@ -34,7 +34,7 @@ class Job(BaseModel):
 
 class Frame(BaseModel):
     id: str
-    frame_id: int
+    frame_id: Union[int, str]
     file_name: str
     width: int
     height: int
@@ -67,6 +67,8 @@ class FullJob(BaseModel):
     status: str
     stage: str
     state: str
+    start_frame: int
+    stop_frame: int
 
 
 class FullSegment(BaseModel):
@@ -90,7 +92,8 @@ class FullTask(BaseModel):
     segment_size: int
     status: str
     labels: List[FullLabel]
-    segments: List[FullSegment]
+    segments: Optional[List[FullSegment]]
+    jobs: List[FullJob]
     data_chunk_size: int
     data_compressed_chunk_type: str
     data_original_chunk_type: str
