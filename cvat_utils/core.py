@@ -4,7 +4,6 @@ import os
 import time
 import warnings
 import zipfile
-import numpy as np
 from typing import Dict, List, Tuple, Union
 
 from cvat_utils import api_requests, config
@@ -14,7 +13,6 @@ from cvat_utils.models import (
     FullProject,
     FullTask,
     FullTaskMetadata,
-    FullJob,
     Job,
     Task,
 )
@@ -80,8 +78,8 @@ def _load_task(task_id: int) -> FullTask:
         while jobs_dict.get("next", None) is not None:
             jobs_dict = api_requests.get(jobs_dict["next"])
             jobs.extend(jobs_dict["results"])
-    start_farmes = [j["start_frame"] for j in jobs]
-    stop_frames = [j["stop_frame"] for j in jobs]
+    # start_frames = [j["start_frame"] for j in jobs]
+    # stop_frames = [j["stop_frame"] for j in jobs]
 
     task_dict["jobs"] = jobs
     task_dict["segments"] = None
@@ -111,7 +109,7 @@ def _load_task_metadata(task_id: int) -> FullTaskMetadata:
 
 
 def load_project_data(
-        project_id: int, *, return_dict: bool = False
+    project_id: int, *, return_dict: bool = False
 ) -> Tuple[Union[FullProject, dict], List[Union[Task, dict]]]:
     """Load project metadata from CVAT."""
     project = _load_project(project_id)
@@ -130,7 +128,7 @@ def image_path_to_image_id(image_path: str) -> str:
 
 
 def load_task_data(
-        task_id: int, *, return_dict: bool = False
+    task_id: int, *, return_dict: bool = False
 ) -> Tuple[Union[FullTask, dict], List[Union[Job, dict]], Dict[int, Union[Frame, dict]]]:
     """Load task metadata from CVAT."""
     # load annotation data from CVAT
@@ -162,7 +160,7 @@ def load_task_data(
             task_id=task_id,
             task_name=task.name,
             job_id=None,
-            status=None
+            status=None,
         )
         for frame_id, x in zip(frame_ids_range, meta.frames)
     }
@@ -171,13 +169,13 @@ def load_task_data(
     for job_data in jobs:
         for frame_id in range(job_data.start_frame, job_data.stop_frame + 1):
             assert (
-                    frame_id in frames
+                frame_id in frames
             ), f"Unexpected CVAT data: job ({job_data.id}) is missing a frame ({frame_id})."
             frames[frame_id].job_id = job_data.id
             frames[frame_id].status = job_data.status
     for frame_id, frame_data in frames.items():
         assert (
-                frame_data.job_id is not None
+            frame_data.job_id is not None
         ), f"Unexpected CVAT data: frame ({frame_id}) is missing job id."
 
     if return_dict:
@@ -189,7 +187,7 @@ def load_task_data(
 
 
 def load_annotations(
-        job: Union[Job, dict], *, return_dict: bool = False
+    job: Union[Job, dict], *, return_dict: bool = False
 ) -> Union[FullAnnotations, dict]:
     """Load annotations from a single job in CVAT."""
     if isinstance(job, Job):
