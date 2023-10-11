@@ -18,7 +18,6 @@ def get_foreground_background(image: np.ndarray, mask: np.ndarray) -> Tuple[np.n
     -------
         Tuple with two images (i.e., np.arrays) with removed foreground and background.
     """
-
     height, width, _ = image.shape
     img = Image.new("L", (int(width), int(height)), 0)
     ImageDraw.Draw(img).polygon(mask, outline=1, fill=1)
