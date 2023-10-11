@@ -24,14 +24,31 @@ logger = logging.getLogger("cvat_utils")
 def _load_project(project_id: int) -> FullProject:
     project_url = f"{config.API_URL}/projects/{project_id}"
     project_dict = api_requests.get(project_url)
+    tasks_dict = api_requests.get(project_dict["tasks"]["url"])
 
-    # ignore fields like svg to prevent warning
-    # svg field occurs only in some labels (masks)
+    tasks = []
+    if "tasks" in project_dict:
+        tasks_dict = api_requests.get(project_dict["tasks"]["url"])
+        tasks.extend(tasks_dict["results"])
+        while tasks_dict.get("next", None) is not None:
+            tasks_dict = api_requests.get(tasks_dict["next"])
+            tasks.extend(tasks_dict["results"])
+    tasks = [t["id"] for t in tasks]
+    project_dict["tasks"] = tasks
+
+    labels = []
+    if "labels" in project_dict:
+        lables_dict = api_requests.get(project_dict["labels"]["url"])
+        labels.extend(lables_dict["results"])
+        while lables_dict.get("next", None) is not None:
+            lables_dict = api_requests.get(lables_dict["next"])
+            labels.extend(lables_dict["results"])
+    project_dict["labels"] = labels
+
     if "labels" in project_dict:
         for x in project_dict["labels"]:
             if "svg" in x:
                 del x["svg"]
-
     project = FullProject(**project_dict)
     if project.dict() != project_dict:
         warnings.warn(
@@ -43,6 +60,29 @@ def _load_project(project_id: int) -> FullProject:
 def _load_task(task_id: int) -> FullTask:
     task_url = f"{config.API_URL}/tasks/{task_id}"
     task_dict = api_requests.get(task_url)
+
+    labels = []
+    if "labels" in task_dict:
+        lables_dict = api_requests.get(task_dict["labels"]["url"])
+        labels.extend(lables_dict["results"])
+        while lables_dict.get("next", None) is not None:
+            lables_dict = api_requests.get(lables_dict["next"])
+            labels.extend(lables_dict["results"])
+    task_dict["labels"] = labels
+
+    jobs = []
+    # print(task_dict)
+    if "jobs" in task_dict:
+        jobs_dict = api_requests.get(task_dict["jobs"]["url"])
+        jobs.extend(jobs_dict["results"])
+        while jobs_dict.get("next", None) is not None:
+            jobs_dict = api_requests.get(jobs_dict["next"])
+            jobs.extend(jobs_dict["results"])
+    # start_frames = [j["start_frame"] for j in jobs]
+    # stop_frames = [j["stop_frame"] for j in jobs]
+
+    task_dict["jobs"] = jobs
+    task_dict["segments"] = None
 
     # ignore fields like svg to prevent warning
     # svg field occurs only in some labels (masks)
@@ -96,6 +136,7 @@ def load_task_data(
     meta = _load_task_metadata(task_id)
 
     # get list of jobs in the task
+    """
     assert all(
         [len(x.jobs) == 1 for x in task.segments]
     ), "Unexpected CVAT data: one segment has multiple jobs."
@@ -104,6 +145,8 @@ def load_task_data(
         for segment in task.segments
         for job in segment.jobs
     ]
+    """
+    jobs = [Job(**job.dict()) for job in task.jobs]
 
     # get list of frames
     frame_ids_range = range(meta.start_frame, meta.stop_frame + 1)
@@ -116,6 +159,8 @@ def load_task_data(
             height=x.height,
             task_id=task_id,
             task_name=task.name,
+            job_id=None,
+            status=None,
         )
         for frame_id, x in zip(frame_ids_range, meta.frames)
     }
