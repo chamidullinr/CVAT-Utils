@@ -11,21 +11,16 @@ def get_foreground_background(image: np.ndarray, mask: np.ndarray) -> Tuple[np.n
     Parameters
     ----------
     image
-        Given image as np.array.
+        Given image as np.ndarray
     mask:
-        ??
+        Binary mask as np.ndarray
     Returns
     -------
         Tuple with two images (i.e., np.arrays) with removed foreground and background.
     """
-    height, width, _ = image.shape
-    img = Image.new("L", (int(width), int(height)), 0)
-    ImageDraw.Draw(img).polygon(mask, outline=1, fill=1)
-    mask = np.array(img)
 
     foreground_mask = np.logical_not(mask).astype("uint8")
+    masked_foreground = cv2.bitwise_and(image, image, mask=mask)
+    masked_backround = cv2.bitwise_and(image, image, mask=foreground_mask)
 
-    result_foreground = cv2.bitwise_and(image, image, mask=mask)
-    result_backround = cv2.bitwise_and(image, image, mask=foreground_mask)
-
-    return result_foreground, result_backround
+    return masked_foreground, masked_backround
