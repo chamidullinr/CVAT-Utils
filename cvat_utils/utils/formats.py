@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from PIL import Image, ImageDraw
 
 
 def rle_to_mask(points: list, image_height: int, image_width: int) -> np.ndarray:
@@ -57,3 +58,27 @@ def mask_to_points(mask: np.ndarray) -> list:
     if contours.size < 3 * 2:
         raise Exception("Less then three point have been detected. Can not build a polygon.")
     return contours.reshape(-1).tolist()
+
+
+def points_to_mask(image: np.ndarray, polygon_points: np.ndarray) -> np.ndarray:
+    """Converts polygon points to binary mask.
+
+    Parameters
+    ----------
+    image
+        Given image as np.array.
+    polygon_points:
+        Polygon in a format [x1, y1, x2, y2 ...]
+    Returns
+    -------
+        Binary Mask as np.ndarray.
+    """
+    height, width, _ = image.shape
+    x_coordinates = polygon_points[::2]
+    y_coordinates = polygon_points[1::2]
+    polygon = list(zip(x_coordinates, y_coordinates))
+
+    image = Image.new("L", (int(width), int(height)), 0)
+    ImageDraw.Draw(image).polygon(polygon, outline=1, fill=1)
+
+    return np.array(image)
