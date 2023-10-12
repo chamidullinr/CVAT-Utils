@@ -17,7 +17,6 @@ def get_foreground_background(image: np.ndarray, mask: np.ndarray) -> Tuple[np.n
     -------
         Tuple with two images (i.e., np.arrays) with removed foreground and background.
     """
-
     foreground_mask = np.logical_not(mask).astype("uint8")
     masked_foreground = cv2.bitwise_and(image, image, mask=mask)
     masked_backround = cv2.bitwise_and(image, image, mask=foreground_mask)

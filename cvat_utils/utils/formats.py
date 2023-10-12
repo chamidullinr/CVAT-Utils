@@ -73,7 +73,6 @@ def points_to_mask(image: np.ndarray, polygon_points: np.ndarray) -> np.ndarray:
     -------
         Binary Mask as np.ndarray.
     """
-
     height, width, _ = image.shape
     x_coordinates = polygon_points[::2]
     y_coordinates = polygon_points[1::2]
