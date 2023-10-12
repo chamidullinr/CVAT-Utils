@@ -17,7 +17,9 @@ from cvat_utils import (
     load_annotations,
     load_credentials,
     load_project_data,
+    load_project_labels,
     load_task_data,
+    load_task_labels,
 )
 from cvat_utils.models import Frame, FullShape, FullTag, FullTrack, FullTrackShape
 from cvat_utils.utils import ErrorMonitor, to_json
@@ -299,8 +301,9 @@ def get_task_metadata(
     """
     # load task data from CVAT
     task, jobs, task_images = load_task_data(task_id)
-    id2label = {x.id: x.name for x in task.labels}
-    id2attrib = {attr["id"]: attr["name"] for x in task.labels for attr in x.attributes}
+    labels = load_task_labels(task_id)
+    id2label = {x.id: x.name for x in labels}
+    id2attrib = {attr["id"]: attr["name"] for x in labels for attr in x.attributes}
 
     # drop task images from jobs that are not completed yet
     if not all_jobs:
@@ -450,7 +453,8 @@ def download_data(
         logger.error(f"Tasks belong to multiple projects: {project_ids}.")
         sys.exit(0)
     project, _ = load_project_data(project_ids[0])
-    categories = [x.dict() for x in project.labels]
+    labels = load_project_labels(project_ids[0])
+    categories = [x.dict() for x in labels]
     categories = sorted(categories, key=lambda x: x["name"])
 
     # load task data from CVAT

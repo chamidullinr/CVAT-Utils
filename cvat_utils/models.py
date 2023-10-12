@@ -49,6 +49,16 @@ CVAT API models.
 """
 
 
+class FullLink(BaseModel):
+    url: str
+    count: int
+
+
+class FullJobLink(FullLink):
+    completed: Optional[int]
+    validation: Optional[int]
+
+
 class FullLabel(BaseModel):
     id: int
     name: str
@@ -56,25 +66,35 @@ class FullLabel(BaseModel):
     attributes: List[dict]
     type: str
     sublabels: list
+    project_id: int
+    parent_id: Optional[int]
     has_parent: bool
 
 
 class FullJob(BaseModel):
     id: int
     url: str
-    status: str
+    task_id: int
+    project_id: int
     assignee: Optional[dict]
+    guide_id: Any  # not tested what the CVAT API returns
+    dimension: str
+    bug_tracker: str
     status: str
     stage: str
     state: str
+    mode: str
+    frame_count: int
     start_frame: int
     stop_frame: int
-
-
-class FullSegment(BaseModel):
-    start_frame: int
-    stop_frame: int
-    jobs: List[FullJob]
+    data_chunk_size: int
+    data_compressed_chunk_type: str
+    created_date: str
+    updated_date: str
+    issues: FullLink
+    labels: FullLink
+    type: str
+    organization: Any  # not tested what the CVAT API returns
 
 
 class FullTask(BaseModel):
@@ -91,12 +111,12 @@ class FullTask(BaseModel):
     overlap: int
     segment_size: int
     status: str
-    labels: List[FullLabel]
-    segments: Optional[List[FullSegment]]
-    jobs: List[FullJob]
+    labels: FullLink
+    jobs: FullJobLink
     data_chunk_size: int
     data_compressed_chunk_type: str
     data_original_chunk_type: str
+    guide_id: Any  # not tested what the CVAT API returns
     size: int
     image_quality: int
     data: int
@@ -111,6 +131,7 @@ class FullFrame(BaseModel):
     width: int
     height: int
     name: str
+    related_files: int
     has_related_context: bool
 
 
@@ -123,16 +144,18 @@ class FullTaskMetadata(BaseModel):
     frame_filter: str
     frames: List[FullFrame]
     deleted_frames: list  # not tested what the CVAT API returns
+    included_frames: Any  # not tested what the CVAT API returns
 
 
 class FullProject(BaseModel):
     id: int
     url: str
     name: str
-    labels: List[FullLabel]
-    tasks: List[int]
+    labels: FullLink
+    tasks: FullLink
     owner: Optional[dict]
     assignee: Optional[dict]
+    guide_id: Any  # not tested what the CVAT API returns
     bug_tracker: str
     created_date: str
     updated_date: str

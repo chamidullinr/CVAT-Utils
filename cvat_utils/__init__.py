@@ -7,7 +7,9 @@ from .core import (
     image_path_to_image_id,
     load_annotations,
     load_project_data,
+    load_project_labels,
     load_task_data,
+    load_task_labels,
 )
 from .utils.log import setup_logging
 from .utils.rc_params import RcParams
@@ -20,7 +22,9 @@ __all__ = [
     "load_credentials",
     "download_images",
     "load_project_data",
+    "load_project_labels",
     "load_task_data",
+    "load_task_labels",
     "load_annotations",
     "image_path_to_image_id",
     "rc_params",

@@ -10,6 +10,8 @@ from cvat_utils import api_requests, config
 from cvat_utils.models import (
     Frame,
     FullAnnotations,
+    FullJob,
+    FullLabel,
     FullProject,
     FullTask,
     FullTaskMetadata,
@@ -24,31 +26,14 @@ logger = logging.getLogger("cvat_utils")
 def _load_project(project_id: int) -> FullProject:
     project_url = f"{config.API_URL}/projects/{project_id}"
     project_dict = api_requests.get(project_url)
-    tasks_dict = api_requests.get(project_dict["tasks"]["url"])
 
-    tasks = []
-    if "tasks" in project_dict:
-        tasks_dict = api_requests.get(project_dict["tasks"]["url"])
-        tasks.extend(tasks_dict["results"])
-        while tasks_dict.get("next", None) is not None:
-            tasks_dict = api_requests.get(tasks_dict["next"])
-            tasks.extend(tasks_dict["results"])
-    tasks = [t["id"] for t in tasks]
-    project_dict["tasks"] = tasks
+    # # ignore fields like svg to prevent warning
+    # # svg field occurs only in some labels (masks)
+    # if "labels" in project_dict:
+    #     for x in project_dict["labels"]:
+    #         if "svg" in x:
+    #             del x["svg"]
 
-    labels = []
-    if "labels" in project_dict:
-        lables_dict = api_requests.get(project_dict["labels"]["url"])
-        labels.extend(lables_dict["results"])
-        while lables_dict.get("next", None) is not None:
-            lables_dict = api_requests.get(lables_dict["next"])
-            labels.extend(lables_dict["results"])
-    project_dict["labels"] = labels
-
-    if "labels" in project_dict:
-        for x in project_dict["labels"]:
-            if "svg" in x:
-                del x["svg"]
     project = FullProject(**project_dict)
     if project.dict() != project_dict:
         warnings.warn(
@@ -57,39 +42,37 @@ def _load_project(project_id: int) -> FullProject:
     return project
 
 
+def _load_project_tasks(project_id: int) -> List[FullTask]:
+    tasks_url = f"{config.API_URL}/tasks"
+
+    # make first call
+    tasks_dict = api_requests.get(tasks_url, params=dict(project_id=project_id))
+    tasks = [FullTask(**x) for x in tasks_dict["results"]]
+    if len(tasks) > 0 and tasks[0].dict() != tasks_dict["results"][0]:
+        warnings.warn("Tasks model in the library doesn't equal to the model returned by CVAT API.")
+
+    # make additional calls to load remaining data
+    page = 2
+    while tasks_dict.get("next") is not None:
+        tasks_dict = api_requests.get(tasks_url, params=dict(project_id=project_id, page=page))
+        for x in tasks_dict["results"]:
+            tasks.append(FullTask(**x))
+        page += 1
+    assert len(tasks) == tasks_dict["count"]
+
+    return tasks
+
+
 def _load_task(task_id: int) -> FullTask:
     task_url = f"{config.API_URL}/tasks/{task_id}"
     task_dict = api_requests.get(task_url)
 
-    labels = []
-    if "labels" in task_dict:
-        lables_dict = api_requests.get(task_dict["labels"]["url"])
-        labels.extend(lables_dict["results"])
-        while lables_dict.get("next", None) is not None:
-            lables_dict = api_requests.get(lables_dict["next"])
-            labels.extend(lables_dict["results"])
-    task_dict["labels"] = labels
-
-    jobs = []
-    # print(task_dict)
-    if "jobs" in task_dict:
-        jobs_dict = api_requests.get(task_dict["jobs"]["url"])
-        jobs.extend(jobs_dict["results"])
-        while jobs_dict.get("next", None) is not None:
-            jobs_dict = api_requests.get(jobs_dict["next"])
-            jobs.extend(jobs_dict["results"])
-    # start_frames = [j["start_frame"] for j in jobs]
-    # stop_frames = [j["stop_frame"] for j in jobs]
-
-    task_dict["jobs"] = jobs
-    task_dict["segments"] = None
-
-    # ignore fields like svg to prevent warning
-    # svg field occurs only in some labels (masks)
-    if "labels" in task_dict:
-        for x in task_dict["labels"]:
-            if "svg" in x:
-                del x["svg"]
+    # # ignore fields like svg to prevent warning
+    # # svg field occurs only in some labels (masks)
+    # if "labels" in task_dict:
+    #     for x in task_dict["labels"]:
+    #         if "svg" in x:
+    #             del x["svg"]
 
     task = FullTask(**task_dict)
     if task.dict() != task_dict:
@@ -108,14 +91,85 @@ def _load_task_metadata(task_id: int) -> FullTaskMetadata:
     return meta
 
 
+def _load_task_jobs(task_id: int) -> List[FullJob]:
+    jobs_url = f"{config.API_URL}/jobs"
+
+    # make first call
+    jobs_dict = api_requests.get(jobs_url, params=dict(task_id=task_id))
+    jobs = [FullJob(**x) for x in jobs_dict["results"]]
+    if len(jobs) > 0 and jobs[0].dict() != jobs_dict["results"][0]:
+        warnings.warn("Jobs model in the library doesn't equal to the model returned by CVAT API.")
+
+    # make additional calls to load remaining data
+    page = 2
+    while jobs_dict.get("next") is not None:
+        jobs_dict = api_requests.get(jobs_url, params=dict(task_id=task_id, page=page))
+        for x in jobs_dict["results"]:
+            jobs.append(FullJob(**x))
+        page += 1
+    assert len(jobs) == jobs_dict["count"]
+
+    return jobs
+
+
+def load_project_labels(project_id: int) -> List[FullLabel]:
+    """Load project labels from CVAT."""
+    labels_url = f"{config.API_URL}/labels"
+
+    # make first call
+    labels_dict = api_requests.get(labels_url, params=dict(project_id=project_id))
+    labels = [FullLabel(**x) for x in labels_dict["results"]]
+    if len(labels) > 0 and labels[0].dict() != labels_dict["results"][0]:
+        warnings.warn(
+            ":abels model in the library doesn't equal to the model returned by CVAT API."
+        )
+
+    # make additional calls to load remaining data
+    page = 2
+    while labels_dict.get("next") is not None:
+        labels_dict = api_requests.get(labels_url, params=dict(project_id=project_id, page=page))
+        for x in labels_dict["results"]:
+            labels.append(FullLabel(**x))
+        page += 1
+    assert len(labels) == labels_dict["count"]
+
+    return labels
+
+
+def load_task_labels(task_id: int) -> List[FullLabel]:
+    """Load task labels from CVAT."""
+    labels_url = f"{config.API_URL}/labels"
+
+    # make first call
+    labels_dict = api_requests.get(labels_url, params=dict(task_id=task_id))
+    labels = [FullLabel(**x) for x in labels_dict["results"]]
+    if len(labels) > 0 and labels[0].dict() != labels_dict["results"][0]:
+        warnings.warn(
+            "Labels model in the library doesn't equal to the model returned by CVAT API."
+        )
+
+    # make additional calls to load remaining data
+    page = 2
+    while labels_dict.get("next") is not None:
+        labels_dict = api_requests.get(labels_url, params=dict(task_id=task_id, page=page))
+        for x in labels_dict["results"]:
+            labels.append(FullLabel(**x))
+        page += 1
+    assert len(labels) == labels_dict["count"]
+
+    return labels
+
+
 def load_project_data(
     project_id: int, *, return_dict: bool = False
 ) -> Tuple[Union[FullProject, dict], List[Union[Task, dict]]]:
     """Load project metadata from CVAT."""
     project = _load_project(project_id)
-    tasks = [
-        Task(**_load_task(task_id).dict()) for task_id in project.tasks
-    ]  # get list of tasks in the project
+    tasks = _load_project_tasks(project_id)
+
+    # convert to internal model
+    tasks = [Task(**x.dict()) for x in tasks]
+
     if return_dict:
         project = project.dict()
         tasks = [x.dict() for x in tasks]
@@ -134,19 +188,10 @@ def load_task_data(
     # load annotation data from CVAT
     task = _load_task(task_id)
     meta = _load_task_metadata(task_id)
+    jobs = _load_task_jobs(task_id)
 
-    # get list of jobs in the task
-    """
-    assert all(
-        [len(x.jobs) == 1 for x in task.segments]
-    ), "Unexpected CVAT data: one segment has multiple jobs."
-    jobs = [
-        Job(**job.dict(), start_frame=segment.start_frame, stop_frame=segment.stop_frame)
-        for segment in task.segments
-        for job in segment.jobs
-    ]
-    """
-    jobs = [Job(**job.dict()) for job in task.jobs]
+    # convert to internal model
+    jobs = [Job(**x.dict()) for x in jobs]
 
     # get list of frames
     frame_ids_range = range(meta.start_frame, meta.stop_frame + 1)
