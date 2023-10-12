@@ -79,7 +79,7 @@ def points_to_mask(image: np.ndarray, polygon_points: np.ndarray) -> np.ndarray:
     y_coordinates = polygon_points[1::2]
     polygon = list(zip(x_coordinates, y_coordinates))
 
-    image = Image.new('L', (int(width), int(height)), 0)
+    image = Image.new("L", (int(width), int(height)), 0)
     ImageDraw.Draw(image).polygon(polygon, outline=1, fill=1)
 
     return np.array(image)

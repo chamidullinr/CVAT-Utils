@@ -2,7 +2,6 @@ from typing import Tuple
 
 import cv2
 import numpy as np
-from PIL import Image, ImageDraw
 
 
 def get_foreground_background(image: np.ndarray, mask: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
