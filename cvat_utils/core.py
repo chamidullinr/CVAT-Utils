@@ -23,6 +23,27 @@ from cvat_utils.utils import is_image
 logger = logging.getLogger("cvat_utils")
 
 
+def _load_paged_list(url: str, params: dict = None) -> List[dict]:
+    params = params or {}
+    assert "page" not in params, "Parameter 'page' is not allowed."
+
+    results = []
+
+    # make first call
+    response_dict = api_requests.get(url, params=params)
+    results = response_dict["results"]
+
+    # make additional calls to load remaining data
+    page = 2
+    while response_dict.get("next") is not None:
+        response_dict = api_requests.get(url, params=dict(**params, page=page))
+        results.extend(response_dict["results"])
+        page += 1
+    assert len(results) == response_dict["count"]
+
+    return results
+
+
 def _load_project(project_id: int) -> FullProject:
     project_url = f"{config.API_URL}/projects/{project_id}"
     project_dict = api_requests.get(project_url)
@@ -44,22 +65,10 @@ def _load_project(project_id: int) -> FullProject:
 
 def _load_project_tasks(project_id: int) -> List[FullTask]:
     tasks_url = f"{config.API_URL}/tasks"
-
-    # make first call
-    tasks_dict = api_requests.get(tasks_url, params=dict(project_id=project_id))
-    tasks = [FullTask(**x) for x in tasks_dict["results"]]
-    if len(tasks) > 0 and tasks[0].dict() != tasks_dict["results"][0]:
+    tasks = _load_paged_list(tasks_url, params=dict(project_id=project_id))
+    if len(tasks) > 0 and FullTask(**tasks[0]).dict() != tasks[0]:
         warnings.warn("Tasks model in the library doesn't equal to the model returned by CVAT API.")
-
-    # make additional calls to load remaining data
-    page = 2
-    while tasks_dict.get("next") is not None:
-        tasks_dict = api_requests.get(tasks_url, params=dict(project_id=project_id, page=page))
-        for x in tasks_dict["results"]:
-            tasks.append(FullTask(**x))
-        page += 1
-    assert len(tasks) == tasks_dict["count"]
-
+    tasks = [FullTask(**x) for x in tasks]
     return tasks
 
 
@@ -93,70 +102,24 @@ def _load_task_metadata(task_id: int) -> FullTaskMetadata:
 
 def _load_task_jobs(task_id: int) -> List[FullJob]:
     jobs_url = f"{config.API_URL}/jobs"
-
-    # make first call
-    jobs_dict = api_requests.get(jobs_url, params=dict(task_id=task_id))
-    jobs = [FullJob(**x) for x in jobs_dict["results"]]
-    if len(jobs) > 0 and jobs[0].dict() != jobs_dict["results"][0]:
+    jobs = _load_paged_list(jobs_url, params=dict(task_id=task_id))
+    if len(jobs) > 0 and FullJob(**jobs[0]).dict() != jobs[0]:
         warnings.warn("Jobs model in the library doesn't equal to the model returned by CVAT API.")
-
-    # make additional calls to load remaining data
-    page = 2
-    while jobs_dict.get("next") is not None:
-        jobs_dict = api_requests.get(jobs_url, params=dict(task_id=task_id, page=page))
-        for x in jobs_dict["results"]:
-            jobs.append(FullJob(**x))
-        page += 1
-    assert len(jobs) == jobs_dict["count"]
-
+    jobs = [FullJob(**x) for x in jobs]
     return jobs
 
 
-def load_project_labels(project_id: int) -> List[FullLabel]:
-    """Load project labels from CVAT."""
+def load_labels(*, project_id: int = None, task_id: int = None) -> List[FullLabel]:
+    """Load project or task labels from CVAT."""
+    assert project_id is not None or task_id is not None
     labels_url = f"{config.API_URL}/labels"
-
-    # make first call
-    labels_dict = api_requests.get(labels_url, params=dict(project_id=project_id))
-    labels = [FullLabel(**x) for x in labels_dict["results"]]
-    if len(labels) > 0 and labels[0].dict() != labels_dict["results"][0]:
-        warnings.warn(
-            ":abels model in the library doesn't equal to the model returned by CVAT API."
-        )
-
-    # make additional calls to load remaining data
-    page = 2
-    while labels_dict.get("next") is not None:
-        labels_dict = api_requests.get(labels_url, params=dict(project_id=project_id, page=page))
-        for x in labels_dict["results"]:
-            labels.append(FullLabel(**x))
-        page += 1
-    assert len(labels) == labels_dict["count"]
-
-    return labels
-
-
-def load_task_labels(task_id: int) -> List[FullLabel]:
-    """Load task labels from CVAT."""
-    labels_url = f"{config.API_URL}/labels"
-
-    # make first call
-    labels_dict = api_requests.get(labels_url, params=dict(task_id=task_id))
-    labels = [FullLabel(**x) for x in labels_dict["results"]]
-    if len(labels) > 0 and labels[0].dict() != labels_dict["results"][0]:
+    params = dict(project_id=project_id) if project_id is not None else dict(task_id=task_id)
+    labels = _load_paged_list(labels_url, params=params)
+    if len(labels) > 0 and FullLabel(**labels[0]).dict() != labels[0]:
         warnings.warn(
             "Labels model in the library doesn't equal to the model returned by CVAT API."
         )
-
-    # make additional calls to load remaining data
-    page = 2
-    while labels_dict.get("next") is not None:
-        labels_dict = api_requests.get(labels_url, params=dict(task_id=task_id, page=page))
-        for x in labels_dict["results"]:
-            labels.append(FullLabel(**x))
-        page += 1
-    assert len(labels) == labels_dict["count"]
-
+    labels = [FullLabel(**x) for x in labels]
     return labels
 
 
