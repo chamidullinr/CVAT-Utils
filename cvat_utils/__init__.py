@@ -6,6 +6,7 @@ from .core import (
     download_images,
     image_path_to_image_id,
     load_annotations,
+    load_labels,
     load_project_data,
     load_task_data,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "download_images",
     "load_project_data",
     "load_task_data",
+    "load_labels",
     "load_annotations",
     "image_path_to_image_id",
     "rc_params",
