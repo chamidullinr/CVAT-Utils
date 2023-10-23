@@ -52,14 +52,4 @@ cvat-utils download \
   --points \
   --bboxes
 ```
-Similarly, use any combination of arguments `--points`, `--polylines`, `--polygons`, and `--bboxes`.
-
-## Creating Package Release
-
-Automatic CI/CD workflows are set using GitHub Actions.
-Create new git `tag` to trigger `Build and Create Release` action.
-
-```bash
-git tag -a v1.0.0 -m "Tag message"
-git push origin v1.0.0
-```
+Similarly, use any combination of arguments `--points`, `--polylines`, `--polygons`, `--masks`, `--rectangles`, `--bboxes`, and `--tags`.
